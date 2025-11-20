@@ -241,6 +241,12 @@ export const gameReducer = (state: GS, action: GA): GS => {
       player.guaranteedHeads = false; 
       player.statuses = player.statuses.filter(s => s.type !== 'DamageBuff'); // Remove 1-turn buffs
       
+      // Clear Stuck at the end of the player's turn
+      if (player.statuses.some(s => s.type === 'Stuck')) {
+        log(`${player.name} is no longer Stuck.`);
+        player.statuses = player.statuses.filter(s => s.type !== 'Stuck');
+      }
+
       newState.currentPlayer = opponentId;
       newState.turn += 1;
       newState.phase = 'start';
@@ -282,12 +288,6 @@ export const gameReducer = (state: GS, action: GA): GS => {
           notify(`${nextPlayer.name} took Poison damage`, 'warning');
       }
 
-      // Clear Stuck automatically after opponent's next turn (which is now)
-      if (nextPlayer.statuses.some(s => s.type === 'Stuck')) {
-          log(`${nextPlayer.name} is no longer Stuck.`);
-          nextPlayer.statuses = nextPlayer.statuses.filter(s => s.type !== 'Stuck');
-      }
-      
       // Clear Duration based statuses
       nextPlayer.statuses = nextPlayer.statuses.filter(s => {
         if (s.duration !== undefined) {
@@ -798,7 +798,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
              if (performCoinFlip('Toxic Spit', getRNG(action.rng, rngIndex++), p.id)) {
                  target.statuses.push({ type: 'Poisoned' });
              } else {
-                 target.statuses.push({ type: 'Stuck', duration: 1 }); 
+                 target.statuses.push({ type: 'Stuck' }); 
              }
          }
          else if (def.id === CID.StickyTongue) {
