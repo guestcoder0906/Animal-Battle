@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import { GameState, PlayerState, CardType, GameAction, CardId, Habitat, CoinFlipEvent, GameNotification, PendingReaction, PendingChoice } from '../types';
 import { CARDS, STATUS_DESCRIPTIONS } from '../constants';
@@ -469,9 +470,9 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
   );
 
   const FormationArea = ({ p, isSelf }: { p: PlayerState, isSelf: boolean }) => (
-    <div className={`flex flex-wrap gap-2 justify-center items-center min-h-[90px] md:min-h-[120px] p-2 md:p-3 bg-black/20 rounded-lg w-full border border-white/5 shadow-inner ${evolveMode === 'select-formation' || evolveMode === 'select-apex-target' && isSelf ? 'ring-4 ring-fuchsia-500 bg-fuchsia-900/20 animate-pulse cursor-pointer' : ''}`}>
+    <div className={`flex flex-wrap gap-2 justify-center items-center min-h-[90px] md:min-h-[120px] p-2 md:p-3 bg-black/20 rounded-lg w-full border border-white/5 shadow-inner ${(evolveMode === 'select-formation' || evolveMode === 'select-apex-target') && isSelf ? 'ring-4 ring-fuchsia-500 bg-fuchsia-900/20 animate-pulse cursor-pointer' : ''}`}>
        {p.formation.map(c => (
-         <div key={c.instanceId} className={`relative transition-transform ${evolveMode.startsWith('select-') && isSelf ? 'hover:scale-110' : 'hover:scale-105'}`}>
+         <div key={c.instanceId} className={`relative transition-transform ${(evolveMode === 'select-formation' || evolveMode === 'select-apex-target') && isSelf ? 'hover:scale-110' : 'hover:scale-105'}`}>
            <Card 
              defId={c.defId} 
              instanceId={c.instanceId}
@@ -634,38 +635,32 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
                <button 
                  disabled={!selectedCardId || !isSelectedInFormation || selectedDef?.type !== CardType.Physical || !ACTIVE_PHYSICALS.includes(selectedDef?.id as CardId)}
                  onClick={() => handleAction('ATTACK')}
-                 className={`rounded-lg py-2 md:py-3 font-black text-[10px] md:text-sm transition-all active:scale-95 disabled:opacity-30 disabled:scale-100 ${isSelectedInFormation && selectedDef?.type === CardType.Physical && ACTIVE_PHYSICALS.includes(selectedDef?.id as CardId) ? 'bg-red-600 text-white hover:bg-red-500 shadow-[0_0_15px_rgba(220,38,38,0.4)]' : 'bg-stone-800 text-stone-500'}`}
+                 className={`rounded-lg py-2 md:py-3 font-black text-[10px] md:text-sm transition-all active:scale-95 disabled:opacity-30 disabled:scale-100 ${isSelectedInFormation && selectedDef?.type === CardType.Physical ? 'bg-red-600 text-white hover:bg-red-500 shadow-[0_0_15px_rgba(220,38,38,0.4)]' : 'bg-stone-800 text-stone-500'}`}
                >
                  ATTACK
                </button>
 
                <button 
-                 disabled={!selectedCardId || !isSelectedInFormation || selectedDef?.type !== CardType.Ability || !ACTIVE_ABILITIES.includes(selectedDef?.id as CardId)}
+                 disabled={!selectedCardId || !isSelectedInFormation || ((selectedDef?.type !== CardType.Ability && selectedDef?.type !== CardType.Special) && selectedDef?.type !== CardType.Physical) || (selectedDef?.type === CardType.Ability && !ACTIVE_ABILITIES.includes(selectedDef?.id as CardId)) || (selectedDef?.type === CardType.Special && selectedDef?.id !== CardId.ApexEvolution)}
                  onClick={() => handleAction('ABILITY')}
-                 className={`rounded-lg py-2 md:py-3 font-black text-[10px] md:text-sm transition-all active:scale-95 disabled:opacity-30 disabled:scale-100 ${isSelectedInFormation && selectedDef?.type === CardType.Ability && ACTIVE_ABILITIES.includes(selectedDef?.id as CardId) ? 'bg-purple-600 text-white hover:bg-purple-500 shadow-[0_0_15px_rgba(147,51,234,0.4)]' : selectedDef?.id === CardId.ApexEvolution ? 'bg-cyan-600 text-white hover:bg-cyan-500' : 'bg-stone-800 text-stone-500'}`}
+                 className={`rounded-lg py-2 md:py-3 font-black text-[10px] md:text-sm transition-all active:scale-95 disabled:opacity-30 disabled:scale-100 ${isSelectedInFormation && (selectedDef?.type === CardType.Ability || selectedDef?.type === CardType.Special) ? 'bg-purple-600 text-white hover:bg-purple-500 shadow-[0_0_15px_rgba(147,51,234,0.4)]' : 'bg-stone-800 text-stone-500'}`}
                >
                  ABILITY
                </button>
-
+               
                <button 
                  onClick={endTurn}
-                 className="rounded-lg py-2 md:py-3 font-black text-[10px] md:text-sm bg-amber-700 text-amber-100 hover:bg-amber-600 shadow-[0_0_15px_rgba(217,119,6,0.2)] transition-all active:scale-95 col-span-2 md:col-span-1"
+                 className="rounded-lg py-2 md:py-3 bg-stone-700 text-white font-black text-[10px] md:text-sm hover:bg-stone-600 transition-all active:scale-95 shadow-lg border border-stone-500"
                >
                  END TURN
                </button>
              </>
            ) : (
-             <div className="col-span-4 md:col-span-4 text-center text-stone-500 italic py-2 md:py-3 flex items-center justify-center bg-stone-900/50 rounded-lg border border-stone-800 text-xs md:text-sm">{state.winner ? 'Game Over' : isInterrupted ? 'Waiting for interaction...' : 'Opponent is thinking...'}</div>
+             <div className="col-span-5 text-center py-2 md:py-3 text-stone-500 italic text-xs md:text-sm bg-black/20 rounded-lg border border-white/5">
+               {state.winner ? 'GAME OVER' : isInterrupted ? 'ACTION IN PROGRESS...' : 'OPPONENT TURN...'}
+             </div>
            )}
-           
-           <button 
-             disabled={!selectedCardId || isInterrupted}
-             onClick={() => selectedCardId && setInspectCardId(selectedCardId)}
-             className={`rounded-lg py-2 md:py-3 font-black text-[10px] md:text-sm transition-colors border col-span-4 md:col-span-1 mt-1 md:mt-0 ${selectedCardId && !isInterrupted ? 'bg-cyan-900/50 text-cyan-400 border-cyan-700 hover:bg-cyan-900' : 'bg-stone-900 text-stone-700 border-stone-800'}`}
-           >
-             INSPECT
-           </button>
         </div>
-      </div>
     </div>
   );
+};
