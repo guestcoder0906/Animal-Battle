@@ -1,5 +1,3 @@
-
-
 import { CARDS, generateDeck, getRandomElement as randomElem } from '../constants';
 import { GameState as GS, PlayerState as PS, CardInstance as CI, CreatureType as CT, Habitat as H, CardType as CType, AbilityStatus as AS, CardDef, GameAction as GA, CardId as CID, GameNotification } from '../types';
 
@@ -686,8 +684,8 @@ export const gameReducer = (state: GS, action: GA): GS => {
 
         newState.pendingReaction = null;
 
-        if (action.useAgile && target.stamina >= 2) {
-            target.stamina -= 2;
+        if (action.useAgile && target.stamina >= 1) {
+            target.stamina -= 1;
             log(`${target.name} Evaded ${def.name} using Agile!`);
             notify("Evaded!", 'success');
             
@@ -784,7 +782,40 @@ export const gameReducer = (state: GS, action: GA): GS => {
 
         // PHYSICAL ATTACK LOGIC
         if (def.type === CType.Physical) {
-            
+            // Handle Non-Damaging Physical Actions (Setup/Status) which might be triggered via Ability button or other means
+            if (def.id === CID.Camouflage) {
+                 if (performCoinFlip('Camouflage', getRNG(action.rng, rngIndex++), p.id)) {
+                     p.statuses.push({ type: 'Camouflaged', duration: 100 }); // Until coin flip breaks it
+                     log(`${p.name} is Camouflaged.`);
+                     notify("Camouflaged!", 'success');
+                 } else {
+                     notify("Camouflage failed.", 'warning');
+                 }
+                 return newState;
+            }
+            if (def.id === CID.AmbushAttack) {
+                 if (performCoinFlip('Ambush Setup', getRNG(action.rng, rngIndex++), p.id)) {
+                      p.statuses.push({ type: 'Accurate', duration: 1 }); 
+                      log(`${p.name} prepares Ambush (Cannot be evaded).`);
+                      notify("Ambush Ready!", 'success');
+                 }
+                 return newState;
+            }
+            if (def.id === CID.SwimFast) {
+                 if (newState.habitat === H.Water) {
+                    p.statuses.push({ type: 'Chasing', duration: 1 });
+                    log(`${p.name} is Swimming Fast (Chasing).`);
+                    notify("Chasing!", 'success');
+                 } else {
+                    notify("Swim Fast requires Water!", 'warning');
+                    // Refund for misclick/invalid usage logic if desired, but standard is fail.
+                    // To be nice, we can refund:
+                    p.stamina += def.staminaCost; 
+                    p.hasActedThisTurn = false;
+                 }
+                 return newState;
+            }
+
             // Handle Big Claws Choice Trigger
             if (def.id === CID.BigClaws) {
                 newState.pendingChoice = {
@@ -855,15 +886,13 @@ export const gameReducer = (state: GS, action: GA): GS => {
             }
 
             // Agile Reaction Trigger (Opponent can pay to evade)
-            const canTargetEvade = target.formation.some(c => c.defId === CID.SmallSize || c.defId === CID.Agile) && target.stamina >= 2 && !target.statuses.some(s => s.type === 'Grappled' || s.type === 'CannotEvade' || s.type === 'Stuck');
+            const canTargetEvade = target.formation.some(c => c.defId === CID.SmallSize || c.defId === CID.Agile) && target.stamina >= 1 && !target.statuses.some(s => s.type === 'Grappled' || s.type === 'CannotEvade' || s.type === 'Stuck');
             
             // If attacking with Ambush, flip for evade prevention
             let ambushPrevent = false;
-            if (def.id === CID.AmbushAttack) {
-                 if (performCoinFlip('Ambush', getRNG(action.rng, rngIndex++), p.id)) ambushPrevent = true;
-            }
-            if (def.id === CID.SwimFast) ambushPrevent = true; // Swim fast prevents evasion
-
+            // Ambush Attack itself doesn't prevent evasion unless used as SETUP earlier to get Accurate.
+            // But SwimFast active use IS the setup to prevent evasion next turn, so it returns.
+            
             if (canTargetEvade && !ambushPrevent && !isAccurate) {
                  newState.pendingReaction = {
                      type: 'AGILE_EVADE',

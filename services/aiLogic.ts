@@ -1,5 +1,3 @@
-
-
 import { GameState, GameAction, CardType, CardId, AbilityStatus, CardInstance, PendingReaction } from '../types';
 import { CARDS } from '../constants';
 
@@ -9,7 +7,7 @@ export const computeReaction = (state: GameState, aiId: string): GameAction | nu
    // Handle Agile Reaction
    if (state.pendingReaction && state.pendingReaction.targetId === aiId) {
        const reaction = state.pendingReaction;
-       if (ai.stamina < 2) return { type: 'RESOLVE_AGILE', playerId: aiId, useAgile: false, rng: [] };
+       if (ai.stamina < 1) return { type: 'RESOLVE_AGILE', playerId: aiId, useAgile: false, rng: [] };
 
        // Heuristic: When to evade?
        let shouldEvade = false;
