@@ -1,8 +1,13 @@
 import { CARDS, generateDeck, getRandomElement as randomElem } from '../constants';
-import { GameState as GS, PlayerState as PS, CardInstance as CI, CreatureType as CT, Habitat as H, CardType as CType, AbilityStatus as AS, CardDef, GameAction as GA, CardId as CID, GameNotification } from '../types';
+import { GameState as GS, PlayerState as PS, CardInstance as CI, CreatureType as CT, Habitat as H, CardType as CType, AbilityStatus as AS, CardDef, GameAction as GA, CardId as CID, GameNotification, StatusEffect } from '../types';
 
 const getRNG = (rng: number[] | undefined, index: number): number => {
   return (rng && rng.length > index) ? rng[index] : Math.random();
+};
+
+const isCardCompatible = (player: PS, cardDef: CardDef): boolean => {
+  if (cardDef.creatureTypes === 'All') return true;
+  return cardDef.creatureTypes.includes(player.creatureType);
 };
 
 export const createPlayer = (id: string, name: string): PS => {
@@ -77,6 +82,24 @@ export const gameReducer = (state: GS, action: GA): GS => {
 
   const log = (msg: string) => {
     newState.log.unshift(`[T${newState.turn}] ${msg}`);
+  };
+
+  // Helper to prevent status stacking
+  const addStatus = (player: PS, newStatus: StatusEffect) => {
+      const existing = player.statuses.find(s => s.type === newStatus.type && s.sourceId === newStatus.sourceId);
+      if (existing) {
+          // Update duration if new status has one
+          if (newStatus.duration !== undefined) {
+              existing.duration = newStatus.duration;
+          } else if (existing.duration !== undefined) {
+              // If new status is permanent (no duration) but existing has one, make it permanent
+              delete existing.duration;
+          }
+          // If both are permanent or existing is permanent and new has duration, generally we prioritize permanent or refresh duration.
+          // Logic here: refresh if duration provided, else make permanent.
+      } else {
+          player.statuses.push(newStatus);
+      }
   };
 
   const performCoinFlip = (reason: string, rngVal: number, flipperId?: string): boolean => {
@@ -178,7 +201,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
       
       // Poison Skin (Auto)
       if (target.formation.some(c => c.defId === CID.PoisonSkin)) {
-          attacker.statuses.push({ type: 'Poisoned' });
+          addStatus(attacker, { type: 'Poisoned' });
           log(`${attacker.name} was Poisoned by Poison Skin.`);
           notify("Poisoned by skin!", 'warning');
       }
@@ -190,14 +213,14 @@ export const gameReducer = (state: GS, action: GA): GS => {
 
       // On Hit Effects
       if (def.id === CID.VenomousFangs) {
-         target.statuses.push({ type: 'Poisoned' });
+         addStatus(target, { type: 'Poisoned' });
       }
 
       if (def.id === CID.Leech) {
           // Poison chance
           const poisonFlip = performCoinFlip('Leech Poison', getRNG(rng, rngIndex++), target.id);
           if (!poisonFlip) { // Tails = Poisoned
-              target.statuses.push({ type: 'Poisoned' });
+              addStatus(target, { type: 'Poisoned' });
               log("Leech applied Poison!");
           }
 
@@ -212,7 +235,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
               // Check if already leeched by this source
               const existing = target.statuses.find(s => s.type === 'Leeched' && s.sourceId === attacker.id);
               if (!existing) {
-                  target.statuses.push({ type: 'Leeched', sourceId: attacker.id });
+                  addStatus(target, { type: 'Leeched', sourceId: attacker.id });
                   log(`${target.name} is Leeched!`);
                   notify("Leeched!", 'success');
               }
@@ -223,12 +246,12 @@ export const gameReducer = (state: GS, action: GA): GS => {
       }
       
       if (def.id === CID.GraspingTalons && performCoinFlip('Grapple Chance', getRNG(rng, rngIndex++), attacker.id)) {
-          target.statuses.push({ type: 'Grappled' });
+          addStatus(target, { type: 'Grappled' });
       }
-      if (def.id === CID.StrongJaw) target.statuses.push({ type: 'Grappled' });
+      if (def.id === CID.StrongJaw) addStatus(target, { type: 'Grappled' });
       
       if (def.id === CID.DeathRoll && performCoinFlip('Death Roll', getRNG(rng, rngIndex++), attacker.id)) {
-          target.statuses.push({ type: 'Grappled' });
+          addStatus(target, { type: 'Grappled' });
       }
   };
 
@@ -380,10 +403,14 @@ export const gameReducer = (state: GS, action: GA): GS => {
         if (drawn) {
             const def = CARDS[drawn.defId];
             const isStillDuplicate = nextPlayer.hand.some(c => c.defId === drawn!.defId) || nextPlayer.formation.some(c => c.defId === drawn!.defId);
+            const isCompatible = isCardCompatible(nextPlayer, def);
             
             if (isStillDuplicate) {
                log(`${nextPlayer.name} drew duplicate ${def.name} (Returned to deck).`);
                nextPlayer.deck.push(drawn);
+            } else if (!isCompatible) {
+               nextPlayer.hand.push(drawn);
+               log(`${nextPlayer.name} drew ${def.name} (Added to Hand - Type Mismatch).`);
             } else {
               // Rules: Size and PASSIVE Physical are played immediately.
               const isPassiveTrait = def.type === CType.Physical && def.staminaCost === 0 && !def.isUpgrade && def.id !== CID.Camouflage && def.id !== CID.CamouflageWater && def.id !== CID.Agile; 
@@ -452,6 +479,12 @@ export const gameReducer = (state: GS, action: GA): GS => {
        }
        const replacementCard = p.hand[replaceCardIdx];
 
+       // Validate Compatibility for Evolution Swap
+       if (!isCardCompatible(p, CARDS[replacementCard.defId])) {
+           notify(`Cannot Evolve: ${CARDS[replacementCard.defId].name} is incompatible with ${p.creatureType}.`, 'error');
+           return state;
+       }
+
        p.stamina -= 2;
        p.formation[formationCardIdx] = replacementCard;
        p.hand[replaceCardIdx] = formationCard; 
@@ -510,6 +543,11 @@ export const gameReducer = (state: GS, action: GA): GS => {
       if (cardIdx === -1) return state;
       const card = p.hand[cardIdx];
       const def = CARDS[card.defId];
+
+      if (!isCardCompatible(p, def)) {
+          notify(`Cannot play ${def.name}: Incompatible Creature Type.`, 'error');
+          return state;
+      }
 
       if (def.isUpgrade) {
          if (!action.targetInstanceId) {
@@ -612,7 +650,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
        p.hasUsedForestHide = true;
        
        if (isHeads) {
-          p.statuses.push({ type: 'Hidden', duration: 100 });
+          addStatus(p, { type: 'Hidden', duration: 100 });
           log(`${p.name} is hiding in the Forest!`);
           notify('You are now Hidden!', 'success');
        } else {
@@ -665,10 +703,10 @@ export const gameReducer = (state: GS, action: GA): GS => {
         if (action.choice === 'Attack') {
              resolveAttackDamage(p, opponent, CARDS[CID.BigClaws], action.rng);
         } else if (action.choice === 'Dig') {
-             p.statuses.push({ type: 'Hidden', duration: 1 });
+             addStatus(p, { type: 'Hidden', duration: 1 });
              notify("Used Dig (Hidden)", 'success');
         } else if (action.choice === 'Climb') {
-             p.statuses.push({ type: 'Climbing', duration: 1 });
+             addStatus(p, { type: 'Climbing', duration: 1 });
              notify("Used Climb (Climbing Status)", 'success');
         }
 
@@ -744,6 +782,10 @@ export const gameReducer = (state: GS, action: GA): GS => {
                      notify("Attack failed due to Grapple.", 'warning');
                      return newState;
                  }
+                 // SUCCESS - Remove Grapple
+                 p.statuses = p.statuses.filter(s => s.type !== 'Grappled');
+                 log(`${p.name} broke free from Grapple!`);
+                 notify("Broke free!", 'success');
              }
         }
         
@@ -785,7 +827,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
             // Handle Non-Damaging Physical Actions (Setup/Status) which might be triggered via Ability button or other means
             if (def.id === CID.Camouflage) {
                  if (performCoinFlip('Camouflage', getRNG(action.rng, rngIndex++), p.id)) {
-                     p.statuses.push({ type: 'Camouflaged', duration: 100 }); // Until coin flip breaks it
+                     addStatus(p, { type: 'Camouflaged', duration: 100 }); // Until coin flip breaks it
                      log(`${p.name} is Camouflaged.`);
                      notify("Camouflaged!", 'success');
                  } else {
@@ -795,7 +837,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
             }
             if (def.id === CID.AmbushAttack) {
                  if (performCoinFlip('Ambush Setup', getRNG(action.rng, rngIndex++), p.id)) {
-                      p.statuses.push({ type: 'Accurate', duration: 1 }); 
+                      addStatus(p, { type: 'Accurate', duration: 1 }); 
                       log(`${p.name} prepares Ambush (Cannot be evaded).`);
                       notify("Ambush Ready!", 'success');
                  }
@@ -803,9 +845,17 @@ export const gameReducer = (state: GS, action: GA): GS => {
             }
             if (def.id === CID.SwimFast) {
                  if (newState.habitat === H.Water) {
-                    p.statuses.push({ type: 'Chasing', duration: 1 });
-                    log(`${p.name} is Swimming Fast (Chasing).`);
-                    notify("Chasing!", 'success');
+                    const opponent = newState.players[action.targetPlayerId];
+                    const isImmobilized = opponent.statuses.some(s => s.type === 'Grappled' || s.type === 'Stuck');
+                    
+                    if (!isImmobilized) {
+                        addStatus(p, { type: 'Chasing', duration: 1 });
+                        log(`${p.name} is Swimming Fast (Chasing).`);
+                        notify("Chasing!", 'success');
+                    } else {
+                        log(`${p.name} swims fast (Target already immobilized).`);
+                        notify("Target already stuck/grappled.", 'info');
+                    }
                  } else {
                     notify("Swim Fast requires Water!", 'warning');
                     // Refund for misclick/invalid usage logic if desired, but standard is fail.
@@ -910,35 +960,35 @@ export const gameReducer = (state: GS, action: GA): GS => {
         } else {
             // ABILITY LOGIC
             if (def.id === CID.ShortBurst) { p.stamina += 1; notify("+1 Stamina", 'success'); }
-            if (def.id === CID.AdrenalineRush) { p.stamina += 1; p.statuses.push({ type: 'StaminaDebt' }); notify("Adrenaline Rush!", 'success'); }
+            if (def.id === CID.AdrenalineRush) { p.stamina += 1; addStatus(p, { type: 'StaminaDebt' }); notify("Adrenaline Rush!", 'success'); }
             if (def.id === CID.Confuse) {
                 if (target.formation.some(c => c.defId === CID.Intelligence)) {
                     log(`${target.name} is immune to Confusion.`);
                     notify("Immune!", 'info');
                 } else if (performCoinFlip('Confuse', getRNG(action.rng, rngIndex++), p.id)) {
-                    target.statuses.push({ type: 'Confused', duration: 1 });
+                    addStatus(target, { type: 'Confused', duration: 1 });
                     log(`${target.name} is Confused!`);
                 } else {
                     notify("Confuse failed.", 'warning');
                 }
             }
             if (def.id === CID.Dig) {
-                p.statuses.push({ type: 'Hidden', duration: 1 });
+                addStatus(p, { type: 'Hidden', duration: 1 });
                 log(`${p.name} used Dig.`);
             }
             if (def.id === CID.Freeze) {
                  if (performCoinFlip('Freeze', getRNG(action.rng, rngIndex++), p.id)) {
-                     p.statuses.push({ type: 'Hidden', duration: 1 });
+                     addStatus(p, { type: 'Hidden', duration: 1 });
                      log(`${p.name} froze and is Hidden.`);
                  }
             }
             if (def.id === CID.Flight) {
-                p.statuses.push({ type: 'Flying', duration: 3 }); // Temporary flight
+                addStatus(p, { type: 'Flying', duration: 3 }); // Temporary flight
                 log(`${p.name} took flight!`);
             }
             if (def.id === CID.Roar) {
                  if (performCoinFlip('Roar', getRNG(action.rng, rngIndex++), p.id)) {
-                     target.statuses.push({ type: 'CannotAttack', duration: 1 });
+                     addStatus(target, { type: 'CannotAttack', duration: 1 });
                      log(`${target.name} is terrified by Roar!`);
                  }
             }
@@ -953,23 +1003,23 @@ export const gameReducer = (state: GS, action: GA): GS => {
             }
             if (def.id === CID.ToxicSpit) {
                 const flip = performCoinFlip('Toxic Spit', getRNG(action.rng, rngIndex++), p.id);
-                if (flip) target.statuses.push({ type: 'Poisoned' });
-                else target.statuses.push({ type: 'Stuck', duration: 1 });
+                if (flip) addStatus(target, { type: 'Poisoned' });
+                else addStatus(target, { type: 'Stuck', duration: 1 });
             }
             if (def.id === CID.Focus) {
                 p.statuses = p.statuses.filter(s => s.type !== 'Grappled' && s.type !== 'Stuck');
                 p.guaranteedHeads = true;
-                p.statuses.push({ type: 'DamageBuff', duration: 1 });
+                addStatus(p, { type: 'DamageBuff', duration: 1 });
                 log(`${p.name} Focused! Breakout + Dmg + Guaranteed Heads.`);
             }
             if (def.id === CID.Rage) {
                 p.statuses = p.statuses.filter(s => s.type !== 'Grappled' && s.type !== 'Stuck');
-                p.statuses.push({ type: 'DamageBuff', duration: 1 });
+                addStatus(p, { type: 'DamageBuff', duration: 1 });
                 log(`${p.name} Enraged!`);
             }
             if (def.id === CID.StickyTongue) {
                 if (performCoinFlip('Sticky Tongue', getRNG(action.rng, rngIndex++), p.id)) {
-                    target.statuses.push({ type: 'Stuck', duration: 1 });
+                    addStatus(target, { type: 'Stuck', duration: 1 });
                 }
             }
             if (def.id === CID.ShedSkin) {
@@ -985,8 +1035,14 @@ export const gameReducer = (state: GS, action: GA): GS => {
             }
             if (def.id === CID.EnhancedSmell) {
                 target.statuses = target.statuses.filter(s => s.type !== 'Hidden' && s.type !== 'Camouflaged');
-                p.statuses.push({ type: 'Chasing', duration: 1 });
-                log(`${p.name} sniffed out the opponent!`);
+                
+                const isImmobilized = target.statuses.some(s => s.type === 'Grappled' || s.type === 'Stuck');
+                if (!isImmobilized) {
+                    addStatus(p, { type: 'Chasing', duration: 1 });
+                    log(`${p.name} sniffed out the opponent!`);
+                } else {
+                     log(`${p.name} sniffed out the opponent.`);
+                }
             }
             if (def.id === CID.ExhaustingRoar) {
                 if (performCoinFlip('Exhaust Roar', getRNG(action.rng, rngIndex++), p.id)) {
@@ -995,7 +1051,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
                 }
             }
             if (def.id === CID.Agile) {
-                p.statuses.push({ type: 'Accurate', duration: 1 });
+                addStatus(p, { type: 'Accurate', duration: 1 });
                 log(`${p.name} is moving with Agility (Accurate).`);
             }
             if (def.id === CID.Copycat && action.targetHandCardId) {

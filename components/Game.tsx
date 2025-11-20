@@ -21,7 +21,8 @@ const ACTIVE_ABILITIES = [
   CardId.Confuse, CardId.Hibernate, CardId.ToxicSpit, CardId.Regeneration, 
   CardId.Focus, CardId.AdrenalineRush, CardId.StickyTongue, CardId.ShedSkin, 
   CardId.Rage, CardId.TerritorialDisplay, CardId.ExhaustingRoar, CardId.EnhancedSmell, 
-  CardId.Copycat, CardId.Agile, CardId.Freeze, CardId.ApexEvolution
+  CardId.Copycat, CardId.Agile, CardId.Freeze, CardId.ApexEvolution,
+  CardId.ShortBurst, CardId.Dig, CardId.Roar, CardId.LoudHiss, CardId.Flight, CardId.Mimicry
 ];
 
 const NotificationToast: React.FC<{ note: GameNotification }> = ({ note }) => {
@@ -591,13 +592,21 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
         </div>
 
         {/* CONTROLS TOOLBAR - STICKY AT BOTTOM */}
-        <div className="sticky bottom-0 grid grid-cols-4 md:grid-cols-5 gap-1 md:gap-2 p-2 md:p-3 bg-stone-950 border-t border-stone-800 shadow-[0_-10px_30px_rgba(0,0,0,0.5)] z-30 shrink-0">
+        <div className="sticky bottom-0 grid grid-cols-5 gap-1 md:gap-2 p-2 md:p-3 bg-stone-950 border-t border-stone-800 shadow-[0_-10px_30px_rgba(0,0,0,0.5)] z-30 shrink-0">
            {isMyTurn && !state.winner && !isInterrupted ? (
              <>
                <button 
+                 onClick={() => setInspectCardId(selectedCardId)}
+                 disabled={!selectedCardId}
+                 className="rounded-lg py-2 md:py-3 bg-stone-700 text-stone-300 font-bold text-[10px] md:text-sm hover:bg-stone-600 transition-all active:scale-95 disabled:opacity-30 border border-stone-500"
+               >
+                 INSPECT
+               </button>
+
+               <button 
                  disabled={!selectedCardId || !isSelectedInHand || !canPlaySelected()}
                  onClick={playSelected}
-                 className={`rounded-lg py-2 md:py-3 font-black text-[10px] md:text-sm transition-all active:scale-95 disabled:opacity-30 disabled:scale-100 col-span-2 md:col-span-1 ${isSelectedInHand ? (canUpgrade ? 'bg-stone-800 text-stone-500 cursor-not-allowed' : selectedDef?.type === CardType.Special ? 'bg-fuchsia-600 text-white hover:bg-fuchsia-500 shadow-[0_0_15px_rgba(217,70,239,0.4)]' : 'bg-blue-600 text-white hover:bg-blue-500 shadow-[0_0_15px_rgba(37,99,235,0.4)]') : 'bg-stone-800 text-stone-500'}`}
+                 className={`rounded-lg py-2 md:py-3 font-black text-[10px] md:text-sm transition-all active:scale-95 disabled:opacity-30 disabled:scale-100 ${isSelectedInHand ? (canUpgrade ? 'bg-stone-800 text-stone-500 cursor-not-allowed' : selectedDef?.type === CardType.Special ? 'bg-fuchsia-600 text-white hover:bg-fuchsia-500 shadow-[0_0_15px_rgba(217,70,239,0.4)]' : 'bg-blue-600 text-white hover:bg-blue-500 shadow-[0_0_15px_rgba(37,99,235,0.4)]') : 'bg-stone-800 text-stone-500'}`}
                >
                  {canUpgrade ? 'SELECT TARGET' : selectedDef?.id === CardId.Evolve ? 'EVOLVE (2 ST)' : 'PLAY CARD'}
                </button>
