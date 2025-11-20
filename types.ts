@@ -87,7 +87,8 @@ export enum CardId {
   EnhancedSmell = 'enhanced_smell',
   Copycat = 'copycat',
   Agile = 'agile',
-  Evolve = 'evolve'
+  Evolve = 'evolve',
+  ApexEvolution = 'apex_evolution'
 }
 
 export interface CardDef {
@@ -111,7 +112,7 @@ export interface CardInstance {
 }
 
 export interface StatusEffect {
-  type: 'Poisoned' | 'Stuck' | 'Grappled' | 'Confused' | 'Hidden' | 'Camouflaged' | 'Flying' | 'CannotAttack' | 'CannotEvade' | 'Accurate' | 'DamageBuff' | 'StaminaDebt' | 'Evading' | 'Chasing';
+  type: 'Poisoned' | 'Stuck' | 'Grappled' | 'Confused' | 'Hidden' | 'Camouflaged' | 'Flying' | 'CannotAttack' | 'CannotEvade' | 'Accurate' | 'DamageBuff' | 'StaminaDebt' | 'Evading' | 'Chasing' | 'Climbing';
   duration?: number; // Turns remaining
   value?: number;
 }
@@ -156,6 +157,14 @@ export interface PendingReaction {
   attackCardId: string;
 }
 
+export interface PendingChoice {
+    id: string;
+    playerId: string;
+    cardId: string; // The card causing the choice (e.g., Big Claws)
+    options: string[]; // 'Attack', 'Dig', 'Climb'
+    targetPlayerId?: string;
+}
+
 export interface GameState {
   gameId: string;
   habitat: Habitat;
@@ -168,6 +177,7 @@ export interface GameState {
   notifications: GameNotification[];
   activeCoinFlip: CoinFlipEvent | null;
   pendingReaction: PendingReaction | null;
+  pendingChoice: PendingChoice | null;
 }
 
 export type GameAction =
@@ -183,4 +193,6 @@ export type GameAction =
   | { type: 'USE_HABITAT_ACTION'; playerId: string; rng: number[] }
   | { type: 'CLEAR_POISON'; playerId: string }
   | { type: 'PLAY_EVOLVE_CARD'; playerId: string; evolveInstanceId: string; targetFormationId: string; replacementHandId: string }
-  | { type: 'RESOLVE_AGILE'; playerId: string; useAgile: boolean; rng: number[] };
+  | { type: 'PLAY_APEX_EVOLUTION'; playerId: string; apexCardInstanceId: string; targetFormationInstanceId: string }
+  | { type: 'RESOLVE_AGILE'; playerId: string; useAgile: boolean; rng: number[] }
+  | { type: 'RESOLVE_CHOICE'; playerId: string; choice: string; rng: number[] };

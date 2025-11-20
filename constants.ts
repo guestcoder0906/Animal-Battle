@@ -1,4 +1,5 @@
 
+
 import { CardDef, CardId, CardType, AbilityStatus, CreatureType, Habitat } from './types';
 
 export const CARDS: Record<string, CardDef> = {
@@ -21,6 +22,11 @@ export const CARDS: Record<string, CardDef> = {
     id: CardId.Evolve, name: "Evolve", type: CardType.Special, abilityStatus: AbilityStatus.ConsumableImpact,
     creatureTypes: 'All', habitats: 'All', staminaCost: 2,
     description: "Swap a played card with a card in your hand. Discard Evolve after use."
+  },
+  [CardId.ApexEvolution]: {
+    id: CardId.ApexEvolution, name: "Apex Evolution", type: CardType.Special, abilityStatus: AbilityStatus.ConsumableImpact,
+    creatureTypes: 'All', habitats: 'All', staminaCost: 2,
+    description: "Free Action. Immediately upgrade a card in your formation without needing the upgrade card in hand. Discard after use."
   },
 
   // --- PHYSICAL ---
@@ -95,7 +101,7 @@ export const CARDS: Record<string, CardDef> = {
   [CardId.BigClaws]: {
     id: CardId.BigClaws, name: "Big Claws", type: CardType.Physical, abilityStatus: AbilityStatus.None,
     creatureTypes: [CreatureType.Mammal, CreatureType.Reptile], habitats: 'All', staminaCost: 1,
-    description: "Upgrade Claw Attack. Deal 3 damage. Can dig/climb.",
+    description: "Upgrade Claw Attack. Choose: Deal 3 damage OR Dig (Hide) OR Climb (Evade non-flying).",
     isUpgrade: true, upgradeTarget: [CardId.ClawAttack]
   },
   [CardId.StrongTail]: {
@@ -328,8 +334,9 @@ export const generateDeck = (creatureType: CreatureType, size: 'Small' | 'Medium
     deck.push(getRandomElement(abilityPool));
   }
 
-  // Ensure Evolve is in deck occasionally or always
+  // Ensure Evolve and Apex Evolution are in deck occasionally
   deck.push(CARDS[CardId.Evolve]);
+  deck.push(CARDS[CardId.ApexEvolution]); // Add new Apex card to deck
 
   return deck;
 };

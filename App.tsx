@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Game } from './components/Game';
 import { gameReducer, createPlayer } from './services/gameEngine';
@@ -98,6 +96,7 @@ const App: React.FC = () => {
       phase: 'start',
       activeCoinFlip: null,
       pendingReaction: null,
+      pendingChoice: null,
       notifications: []
     };
 

@@ -1,5 +1,7 @@
+
+
 import React, { useState, useEffect, useRef } from 'react';
-import { GameState, PlayerState, CardType, GameAction, CardId, Habitat, CoinFlipEvent, GameNotification, PendingReaction } from '../types';
+import { GameState, PlayerState, CardType, GameAction, CardId, Habitat, CoinFlipEvent, GameNotification, PendingReaction, PendingChoice } from '../types';
 import { CARDS } from '../constants';
 import { Card } from './Card';
 
@@ -20,7 +22,7 @@ const ACTIVE_ABILITIES = [
   CardId.Confuse, CardId.Hibernate, CardId.ToxicSpit, CardId.Regeneration, 
   CardId.Focus, CardId.AdrenalineRush, CardId.StickyTongue, CardId.ShedSkin, 
   CardId.Rage, CardId.TerritorialDisplay, CardId.ExhaustingRoar, CardId.EnhancedSmell, 
-  CardId.Copycat, CardId.Agile, CardId.Freeze
+  CardId.Copycat, CardId.Agile, CardId.Freeze, CardId.ApexEvolution
 ];
 
 const NotificationToast: React.FC<{ note: GameNotification }> = ({ note }) => {
@@ -50,9 +52,10 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
   const opponent = opponentId ? state.players[opponentId] : null;
   const isMyTurn = state.currentPlayer === playerId;
   
-  // If there is a pending reaction, we pause normal interactions
-  const isInterrupted = !!state.pendingReaction;
+  // If there is a pending reaction/choice, we pause normal interactions
+  const isInterrupted = !!state.pendingReaction || !!state.pendingChoice;
   const amIReacting = state.pendingReaction?.targetId === playerId;
+  const amIChoosing = state.pendingChoice?.playerId === playerId;
 
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [inspectCardId, setInspectCardId] = useState<string | null>(null);
@@ -60,7 +63,7 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
   const logRef = useRef<HTMLDivElement>(null);
 
   // Evolve State
-  const [evolveMode, setEvolveMode] = useState<'none' | 'select-formation' | 'select-hand'>('none');
+  const [evolveMode, setEvolveMode] = useState<'none' | 'select-formation' | 'select-hand' | 'select-apex-target'>('none');
   const [evolveCardId, setEvolveCardId] = useState<string | null>(null);
   const [evolveTargetId, setEvolveTargetId] = useState<string | null>(null);
 
@@ -127,6 +130,31 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
             return;
         }
     }
+    // APEX EVOLUTION FLOW
+    if (evolveMode === 'select-apex-target') {
+        if (location === 'formation' && isMyCard) {
+            // Check if upgradable
+            const card = me.formation.find(c => c.instanceId === instanceId);
+            const def = card ? CARDS[card.defId] : null;
+            // Find valid upgrade
+            const allCards = Object.values(CARDS);
+            const upgradeDef = allCards.find(c => c.isUpgrade && c.upgradeTarget?.includes(def?.id as CardId));
+
+            if (upgradeDef) {
+                dispatch({
+                    type: 'PLAY_APEX_EVOLUTION',
+                    playerId,
+                    apexCardInstanceId: evolveCardId!,
+                    targetFormationInstanceId: instanceId
+                });
+                setEvolveMode('none');
+                setEvolveCardId(null);
+            } else {
+                // Optionally notify invalid target
+            }
+            return;
+        }
+    }
 
     // STANDARD FLOW
     if (location === 'hand') {
@@ -155,9 +183,19 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
     if (!isMyTurn) return;
 
     const selectedDef = getSelectedCardDef();
-    if (type === 'ABILITY' && selectedDef?.id === CardId.Copycat) {
-      setCopycatMode(true);
-      return;
+    
+    // Special Ability Handling
+    if (type === 'ABILITY') {
+        if (selectedDef?.id === CardId.Copycat) {
+            setCopycatMode(true);
+            return;
+        }
+        if (selectedDef?.id === CardId.ApexEvolution) {
+             setEvolveMode('select-apex-target');
+             setEvolveCardId(selectedCardId);
+             setSelectedCardId(null);
+             return;
+        }
     }
     
     dispatch({
@@ -191,6 +229,15 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
           type: 'RESOLVE_AGILE',
           playerId,
           useAgile,
+          rng: getRNG(5)
+      });
+  };
+
+  const handleChoice = (choice: string) => {
+      dispatch({
+          type: 'RESOLVE_CHOICE',
+          playerId,
+          choice,
           rng: getRNG(5)
       });
   };
@@ -246,7 +293,8 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
     if (!selectedDef || !isSelectedInHand) return false;
     if (selectedDef.isUpgrade) return false; // Force target selection for upgrades
     if (selectedDef.id === CardId.CrushingWeight && me.size !== 'Big') return false;
-    if (selectedDef.id === CardId.Evolve && (me.stamina < 2 || me.formation.length === 0 || me.hand.length < 2)) return false; 
+    if (selectedDef.id === CardId.Evolve && (me.stamina < 2 || me.formation.length === 0 || me.hand.length < 2)) return false;
+    if (selectedDef.id === CardId.ApexEvolution) return false; // Played via Ability button (Free Action)
     return true;
   };
 
@@ -322,6 +370,31 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
       );
   };
 
+  const ChoiceOverlay = ({ choice }: { choice: PendingChoice }) => {
+      return (
+          <div className="fixed inset-0 z-[190] bg-black/90 flex flex-col items-center justify-center p-6 backdrop-blur-md animate-fade-in">
+              <div className="text-3xl font-bold text-amber-500 mb-6">Choose Action for Big Claws</div>
+              <div className="flex flex-wrap justify-center gap-4">
+                  {choice.options.map(opt => (
+                      <button
+                        key={opt}
+                        onClick={() => handleChoice(opt)}
+                        className="bg-stone-800 hover:bg-stone-700 border-2 border-stone-500 hover:border-amber-400 text-white font-bold py-4 px-8 rounded-xl text-xl shadow-lg transition-all transform hover:scale-105"
+                      >
+                          <div className="text-2xl mb-1 block">
+                              {opt === 'Attack' ? '⚔️' : opt === 'Dig' ? '🕳️' : '🧗'}
+                          </div>
+                          {opt}
+                          <div className="text-xs font-normal opacity-60 mt-1">
+                             {opt === 'Attack' ? 'Deal 3 Damage' : opt === 'Dig' ? 'Become Hidden' : 'Gain Climbing (Evade non-flying)'}
+                          </div>
+                      </button>
+                  ))}
+              </div>
+          </div>
+      );
+  };
+
   const CopycatOverlay = () => {
      if (!copycatMode) return null;
      return (
@@ -359,6 +432,7 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
              s.type === 'Accurate' ? 'bg-yellow-900 border-yellow-500 text-yellow-100' : 
              s.type === 'DamageBuff' ? 'bg-red-700 border-red-400 text-white' :
              s.type === 'Chasing' ? 'bg-blue-700 border-blue-400 text-white' :
+             s.type === 'Climbing' ? 'bg-emerald-800 border-emerald-400 text-emerald-100' :
              'bg-purple-900 border-purple-500 text-purple-100'}`}>{s.type === 'DamageBuff' ? '+1 DMG' : s.type}</span>
         ))}
       </div>
@@ -366,9 +440,9 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
   );
 
   const FormationArea = ({ p, isSelf }: { p: PlayerState, isSelf: boolean }) => (
-    <div className={`flex flex-wrap gap-2 justify-center items-center min-h-[90px] md:min-h-[120px] p-2 md:p-3 bg-black/20 rounded-lg w-full border border-white/5 shadow-inner ${evolveMode === 'select-formation' && isSelf ? 'ring-4 ring-fuchsia-500 bg-fuchsia-900/20 animate-pulse cursor-pointer' : ''}`}>
+    <div className={`flex flex-wrap gap-2 justify-center items-center min-h-[90px] md:min-h-[120px] p-2 md:p-3 bg-black/20 rounded-lg w-full border border-white/5 shadow-inner ${evolveMode === 'select-formation' || evolveMode === 'select-apex-target' && isSelf ? 'ring-4 ring-fuchsia-500 bg-fuchsia-900/20 animate-pulse cursor-pointer' : ''}`}>
        {p.formation.map(c => (
-         <div key={c.instanceId} className={`relative transition-transform ${evolveMode === 'select-formation' && isSelf ? 'hover:scale-110' : 'hover:scale-105'}`}>
+         <div key={c.instanceId} className={`relative transition-transform ${evolveMode.startsWith('select-') && isSelf ? 'hover:scale-110' : 'hover:scale-105'}`}>
            <Card 
              defId={c.defId} 
              instanceId={c.instanceId}
@@ -381,8 +455,13 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
            {canUpgrade && selectedDef?.upgradeTarget?.includes(c.defId) && isSelf && evolveMode === 'none' && (
              <div className="absolute inset-0 border-4 border-yellow-400 rounded-lg animate-pulse pointer-events-none z-30" />
            )}
+           {/* Highlight for Evolve */}
            {evolveMode === 'select-formation' && isSelf && (
              <div className="absolute inset-0 border-4 border-fuchsia-400 rounded-lg animate-pulse pointer-events-none z-30" />
+           )}
+           {/* Highlight for Apex Evolution */}
+           {evolveMode === 'select-apex-target' && isSelf && Object.values(CARDS).some(card => card.isUpgrade && card.upgradeTarget?.includes(c.defId)) && (
+             <div className="absolute inset-0 border-4 border-cyan-400 rounded-lg animate-pulse pointer-events-none z-30" />
            )}
          </div>
        ))}
@@ -405,10 +484,13 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
       
       {/* Reaction Overlay for Agile Choice */}
       {amIReacting && state.pendingReaction && <ReactionOverlay reaction={state.pendingReaction} />}
-      {/* Simple blocker if waiting for opponent reaction */}
-      {isInterrupted && !amIReacting && (
+      {/* Choice Overlay for Big Claws */}
+      {amIChoosing && state.pendingChoice && <ChoiceOverlay choice={state.pendingChoice} />}
+      
+      {/* Simple blocker if waiting for opponent */}
+      {isInterrupted && !amIReacting && !amIChoosing && (
           <div className="fixed inset-0 z-[190] bg-black/50 flex items-center justify-center backdrop-blur-sm">
-              <div className="text-2xl font-bold text-white animate-pulse">Opponent is reacting...</div>
+              <div className="text-2xl font-bold text-white animate-pulse">Opponent is choosing...</div>
           </div>
       )}
 
@@ -420,7 +502,9 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
       {/* Evolve Instruction Overlay */}
       {evolveMode !== 'none' && (
           <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[160] w-max max-w-[90%] bg-fuchsia-900/90 border-2 border-fuchsia-500 px-4 py-2 md:px-6 md:py-3 rounded-full shadow-[0_0_20px_rgba(217,70,239,0.6)] animate-bounce text-white font-bold text-sm md:text-lg pointer-events-none backdrop-blur-md text-center">
-              {evolveMode === 'select-formation' ? 'Select a card to REMOVE from formation' : 'Select a card from HAND to add'}
+              {evolveMode === 'select-formation' ? 'Select a card to REMOVE from formation' : 
+               evolveMode === 'select-apex-target' ? 'Select a card to UPGRADE (Free Action)' : 
+               'Select a card from HAND to add'}
           </div>
       )}
 
@@ -482,7 +566,7 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
                     <button onClick={clearPoison} className="px-3 py-1 md:px-4 bg-green-800 text-green-100 text-[10px] md:text-xs font-bold rounded border border-green-600 hover:bg-green-700 animate-pulse shadow-lg hover:scale-105 transition-transform">🧪 Cure Poison (1 Stam)</button>
                   )}
                   {evolveMode !== 'none' && (
-                     <button onClick={() => setEvolveMode('none')} className="px-3 py-1 md:px-4 bg-stone-700 text-white text-[10px] md:text-xs font-bold rounded border border-stone-500 hover:bg-stone-600 shadow-lg">Cancel Evolve</button>
+                     <button onClick={() => {setEvolveMode('none'); setEvolveCardId(null); setEvolveTargetId(null);}} className="px-3 py-1 md:px-4 bg-stone-700 text-white text-[10px] md:text-xs font-bold rounded border border-stone-500 hover:bg-stone-600 shadow-lg">Cancel Selection</button>
                   )}
                </div>
                
@@ -525,7 +609,7 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
                <button 
                  disabled={!selectedCardId || !isSelectedInFormation || selectedDef?.type !== CardType.Ability || !ACTIVE_ABILITIES.includes(selectedDef?.id as CardId)}
                  onClick={() => handleAction('ABILITY')}
-                 className={`rounded-lg py-2 md:py-3 font-black text-[10px] md:text-sm transition-all active:scale-95 disabled:opacity-30 disabled:scale-100 ${isSelectedInFormation && selectedDef?.type === CardType.Ability && ACTIVE_ABILITIES.includes(selectedDef?.id as CardId) ? 'bg-purple-600 text-white hover:bg-purple-500 shadow-[0_0_15px_rgba(147,51,234,0.4)]' : 'bg-stone-800 text-stone-500'}`}
+                 className={`rounded-lg py-2 md:py-3 font-black text-[10px] md:text-sm transition-all active:scale-95 disabled:opacity-30 disabled:scale-100 ${isSelectedInFormation && selectedDef?.type === CardType.Ability && ACTIVE_ABILITIES.includes(selectedDef?.id as CardId) ? 'bg-purple-600 text-white hover:bg-purple-500 shadow-[0_0_15px_rgba(147,51,234,0.4)]' : selectedDef?.id === CardId.ApexEvolution ? 'bg-cyan-600 text-white hover:bg-cyan-500' : 'bg-stone-800 text-stone-500'}`}
                >
                  ABILITY
                </button>
@@ -538,7 +622,7 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
                </button>
              </>
            ) : (
-             <div className="col-span-4 md:col-span-4 text-center text-stone-500 italic py-2 md:py-3 flex items-center justify-center bg-stone-900/50 rounded-lg border border-stone-800 text-xs md:text-sm">{state.winner ? 'Game Over' : isInterrupted ? 'Waiting for reaction...' : 'Opponent is thinking...'}</div>
+             <div className="col-span-4 md:col-span-4 text-center text-stone-500 italic py-2 md:py-3 flex items-center justify-center bg-stone-900/50 rounded-lg border border-stone-800 text-xs md:text-sm">{state.winner ? 'Game Over' : isInterrupted ? 'Waiting for interaction...' : 'Opponent is thinking...'}</div>
            )}
            
            <button 

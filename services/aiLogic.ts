@@ -1,37 +1,56 @@
 
+
 import { GameState, GameAction, CardType, CardId, AbilityStatus, CardInstance, PendingReaction } from '../types';
 import { CARDS } from '../constants';
 
 export const computeReaction = (state: GameState, aiId: string): GameAction | null => {
-   const reaction = state.pendingReaction;
-   if (!reaction || reaction.targetId !== aiId) return null;
-
    const ai = state.players[aiId];
-   if (ai.stamina < 2) return { type: 'RESOLVE_AGILE', playerId: aiId, useAgile: false, rng: [] };
 
-   // Heuristic: When to evade?
-   let shouldEvade = false;
-   
-   // 1. Avoid Lethal
-   // Estimate damage of incoming attack
-   let estimatedDmg = 2;
-   if (reaction.attackCardId === CardId.DiveBomb || reaction.attackCardId === CardId.CrushingWeight) estimatedDmg = 4;
-   if (reaction.attackCardId === CardId.Bite) estimatedDmg = 3;
-   
-   if (ai.hp <= estimatedDmg) shouldEvade = true;
+   // Handle Agile Reaction
+   if (state.pendingReaction && state.pendingReaction.targetId === aiId) {
+       const reaction = state.pendingReaction;
+       if (ai.stamina < 2) return { type: 'RESOLVE_AGILE', playerId: aiId, useAgile: false, rng: [] };
 
-   // 2. High Value Evasion
-   else if (estimatedDmg >= 3) shouldEvade = true;
-   
-   // 3. Random factor if healthy
-   else if (ai.hp < ai.maxHp * 0.5 && Math.random() > 0.4) shouldEvade = true;
+       // Heuristic: When to evade?
+       let shouldEvade = false;
+       
+       // 1. Avoid Lethal
+       let estimatedDmg = 2;
+       if (reaction.attackCardId === CardId.DiveBomb || reaction.attackCardId === CardId.CrushingWeight) estimatedDmg = 4;
+       if (reaction.attackCardId === CardId.Bite) estimatedDmg = 3;
+       
+       if (ai.hp <= estimatedDmg) shouldEvade = true;
+       else if (estimatedDmg >= 3) shouldEvade = true;
+       else if (ai.hp < ai.maxHp * 0.5 && Math.random() > 0.4) shouldEvade = true;
 
-   return {
-       type: 'RESOLVE_AGILE',
-       playerId: aiId,
-       useAgile: shouldEvade,
-       rng: Array.from({length: 5}, () => Math.random())
-   };
+       return {
+           type: 'RESOLVE_AGILE',
+           playerId: aiId,
+           useAgile: shouldEvade,
+           rng: Array.from({length: 5}, () => Math.random())
+       };
+   }
+
+   // Handle Big Claws Choice
+   if (state.pendingChoice && state.pendingChoice.playerId === aiId) {
+       const options = state.pendingChoice.options;
+       let choice = 'Attack';
+       
+       if (ai.hp < 5 && options.includes('Dig')) {
+           choice = 'Dig'; // Hide if low HP
+       } else if (options.includes('Climb') && Math.random() > 0.7) {
+           choice = 'Climb'; // Sometimes climb for tactical evasion
+       }
+       
+       return {
+           type: 'RESOLVE_CHOICE',
+           playerId: aiId,
+           choice,
+           rng: Array.from({length: 5}, () => Math.random())
+       }
+   }
+
+   return null;
 }
 
 export const computeAiActions = (state: GameState, aiId: string): GameAction[] => {
@@ -59,13 +78,8 @@ export const computeAiActions = (state: GameState, aiId: string): GameAction[] =
 
     if (canEvolve) {
         // Evolve logic: Swap a weak formation card for a strong hand card
-        // Filter out Size cards
         const formationCandidates = ai.formation.filter(c => CARDS[c.defId].type !== CardType.Size);
-        
-        // Find weakest card in formation (prioritize low stamina cost or passive)
         const formationTarget = [...formationCandidates].sort((a, b) => CARDS[a.defId].staminaCost - CARDS[b.defId].staminaCost)[0];
-        
-        // Find strongest card in hand (not the Evolve card itself)
         const validHandCards = ai.hand.filter((c, idx) => idx !== evolveCardIndex && c.defId !== CardId.Evolve);
         const handTarget = [...validHandCards].sort((a, b) => CARDS[b.defId].staminaCost - CARDS[a.defId].staminaCost)[0];
 
@@ -78,8 +92,6 @@ export const computeAiActions = (state: GameState, aiId: string): GameAction[] =
                 replacementHandId: handTarget.instanceId
             });
             currentStamina -= 2;
-            // No card played instance for normal action, but we did swap cards.
-            // We won't play another card this turn (Evolve counts as the play).
         }
     } else {
 
@@ -111,8 +123,8 @@ export const computeAiActions = (state: GameState, aiId: string): GameAction[] =
         const validCards = ai.hand.filter(c => {
             const def = CARDS[c.defId];
             const typeMatch = def.creatureTypes === 'All' || def.creatureTypes.includes(ai.creatureType);
-            // Explicitly filter out Evolve so it doesn't try to play it as a normal card
-            return typeMatch && !def.isUpgrade && def.id !== CardId.Evolve;
+            // Explicitly filter out Evolve/Apex so it doesn't try to play it as a normal card
+            return typeMatch && !def.isUpgrade && def.id !== CardId.Evolve && def.id !== CardId.ApexEvolution;
         });
 
         if (validCards.length > 0) {
@@ -147,6 +159,29 @@ export const computeAiActions = (state: GameState, aiId: string): GameAction[] =
         }
         }
     }
+  }
+
+  // --- APEX EVOLUTION LOGIC ---
+  // This is a free action ability, so we check if we can use it regardless of main action state
+  const apexCard = ai.hand.find(c => CARDS[c.defId].id === CardId.ApexEvolution);
+  if (apexCard && currentStamina >= 2) {
+      // Look for upgradable card in formation
+      const allCards = Object.values(CARDS);
+      const upgradableCard = ai.formation.find(c => {
+           const def = CARDS[c.defId];
+           // Check if any upgrade card targets this defId
+           return allCards.some(uc => uc.isUpgrade && uc.upgradeTarget?.includes(def.id));
+      });
+
+      if (upgradableCard) {
+          actions.push({
+              type: 'PLAY_APEX_EVOLUTION',
+              playerId: aiId,
+              apexCardInstanceId: apexCard.instanceId,
+              targetFormationInstanceId: upgradableCard.instanceId
+          });
+          currentStamina -= 2;
+      }
   }
 
   // --- 2. ACTION PHASE ---
@@ -205,6 +240,7 @@ export const computeAiActions = (state: GameState, aiId: string): GameAction[] =
              if (def.id === CardId.Bite) dmg = 3;
              if (def.id === CardId.DiveBomb) dmg = 4;
              if (def.id === CardId.CrushingWeight) dmg = 4;
+             if (def.id === CardId.BigClaws) dmg = 3;
              
              if (opponent.hp <= dmg) score += 1000; // Lethal
              else score += dmg * 2;
