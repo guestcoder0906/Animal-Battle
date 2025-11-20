@@ -37,10 +37,11 @@ export const Card: React.FC<CardProps> = ({ defId, charges, onClick, isPlayable,
   
   let sizeClasses = '';
   if (isSmall) {
-    sizeClasses = 'w-24 h-32 text-[10px]';
+    sizeClasses = 'w-20 h-28 md:w-24 md:h-32 text-[10px]';
   } else {
-    // Standard size or Overlay size
-    sizeClasses = 'w-40 h-56 text-xs z-10';
+    // Standard size (Hand) or Overlay size
+    // Responsive width/height for hand cards
+    sizeClasses = 'w-32 h-48 md:w-40 md:h-56 text-[10px] md:text-xs z-10 shrink-0';
     if (!noHover) {
        sizeClasses += ' hover:scale-105 hover:shadow-xl hover:z-20';
     }
@@ -76,7 +77,7 @@ export const Card: React.FC<CardProps> = ({ defId, charges, onClick, isPlayable,
               {renderCreatureTypes()}
               <span className={def.staminaCost > 0 ? "text-yellow-300 font-bold whitespace-nowrap" : "whitespace-nowrap"}>{def.staminaCost > 0 ? `⚡${def.staminaCost}` : '0 St'}</span>
             </div>
-            <div className="mt-1 opacity-90 leading-tight text-[10px]">
+            <div className="mt-1 opacity-90 leading-tight text-[10px] overflow-y-auto scrollbar-hide">
               {def.description}
             </div>
           </>
@@ -92,8 +93,8 @@ export const Card: React.FC<CardProps> = ({ defId, charges, onClick, isPlayable,
 
         {/* Charges Display */}
         {charges !== undefined && (
-            <div className={`absolute bottom-0 left-0 right-0 text-center font-bold py-1 ${isSmall ? 'text-[10px]' : 'text-xs'} bg-black/80 text-cyan-300 border-t border-cyan-900`}>
-                Uses Left: {charges}
+            <div className={`absolute bottom-0 left-0 right-0 text-center font-bold py-1 ${isSmall ? 'text-[9px]' : 'text-[10px]'} bg-black/80 text-cyan-300 border-t border-cyan-900`}>
+                Uses: {charges}
             </div>
         )}
       </div>
