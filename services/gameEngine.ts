@@ -1,3 +1,4 @@
+
 import { CARDS, generateDeck, getRandomElement as randomElem } from '../constants';
 import { GameState as GS, PlayerState as PS, CardInstance as CI, CreatureType as CT, Habitat as H, CardType as CType, AbilityStatus as AS, CardDef, GameAction as GA, CardId as CID, GameNotification } from '../types';
 
@@ -372,19 +373,34 @@ export const gameReducer = (state: GS, action: GA): GS => {
          notify("Need 2 Stamina to Evolve.", 'error');
          return state;
        }
+       
+       // Validate Formation Card
+       const formationCardIdx = p.formation.findIndex(c => c.instanceId === action.targetFormationId);
+       if (formationCardIdx === -1) {
+         notify("Invalid Evolve target.", 'error');
+         return state;
+       }
+       const formationCard = p.formation[formationCardIdx];
+
+       // Validate Type (Cannot Evolve Size)
+       if (CARDS[formationCard.defId].type === CType.Size) {
+           notify("Cannot Evolve Size cards.", 'error');
+           return state;
+       }
+
+       // Validate Evolve Card presence
        const evolveCardIdx = p.hand.findIndex(c => c.instanceId === action.evolveInstanceId);
        if (evolveCardIdx === -1) return state;
+       
+       // Discard Evolve
        p.hand.splice(evolveCardIdx, 1);
 
-       const formationCardIdx = p.formation.findIndex(c => c.instanceId === action.targetFormationId);
+       // Validate Replacement Card
        const replaceCardIdx = p.hand.findIndex(c => c.instanceId === action.replacementHandId);
-
-       if (formationCardIdx === -1 || replaceCardIdx === -1) {
+       if (replaceCardIdx === -1) {
          notify("Invalid Evolve selection.", 'error');
          return state;
        }
-
-       const formationCard = p.formation[formationCardIdx];
        const replacementCard = p.hand[replaceCardIdx];
 
        p.stamina -= 2;

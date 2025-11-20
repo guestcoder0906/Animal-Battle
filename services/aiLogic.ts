@@ -1,3 +1,4 @@
+
 import { GameState, GameAction, CardType, CardId, AbilityStatus, CardInstance, PendingReaction } from '../types';
 import { CARDS } from '../constants';
 
@@ -58,8 +59,11 @@ export const computeAiActions = (state: GameState, aiId: string): GameAction[] =
 
     if (canEvolve) {
         // Evolve logic: Swap a weak formation card for a strong hand card
+        // Filter out Size cards
+        const formationCandidates = ai.formation.filter(c => CARDS[c.defId].type !== CardType.Size);
+        
         // Find weakest card in formation (prioritize low stamina cost or passive)
-        const formationTarget = [...ai.formation].sort((a, b) => CARDS[a.defId].staminaCost - CARDS[b.defId].staminaCost)[0];
+        const formationTarget = [...formationCandidates].sort((a, b) => CARDS[a.defId].staminaCost - CARDS[b.defId].staminaCost)[0];
         
         // Find strongest card in hand (not the Evolve card itself)
         const validHandCards = ai.hand.filter((c, idx) => idx !== evolveCardIndex && c.defId !== CardId.Evolve);

@@ -1,3 +1,4 @@
+
 import { CardDef, CardId, CardType, AbilityStatus, CreatureType, Habitat } from './types';
 
 export const CARDS: Record<string, CardDef> = {
@@ -287,8 +288,8 @@ export const CARDS: Record<string, CardDef> = {
   },
   [CardId.Agile]: {
     id: CardId.Agile, name: "Agile", type: CardType.Ability, abilityStatus: AbilityStatus.None,
-    creatureTypes: 'All', habitats: 'All', staminaCost: 1,
-    description: "Passive: Can Evade attacks (Costs 2 Stamina). Active (1 St): Attacks cannot miss this turn."
+    creatureTypes: 'All', habitats: 'All', staminaCost: 0,
+    description: "Passive: Can Evade attacks (Costs 2 Stamina). Active (Free): Attacks cannot miss this turn."
   },
 };
 
