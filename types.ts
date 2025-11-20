@@ -1,4 +1,5 @@
 
+
 export enum CreatureType {
   Mammal = 'Mammal',
   Reptile = 'Reptile',
@@ -112,7 +113,7 @@ export interface CardInstance {
 }
 
 export interface PlayerStatus {
-  type: 'Grappled' | 'Poisoned' | 'Stuck' | 'Blinded' | 'Confused' | 'Hidden' | 'Flying' | 'Camouflaged' | 'StaminaDebt' | 'CannotEvade' | 'Chasing' | 'Accurate' | 'DamageBuff' | 'CannotAttack';
+  type: 'Grappled' | 'Poisoned' | 'Stuck' | 'Blinded' | 'Confused' | 'Hidden' | 'Flying' | 'Camouflaged' | 'StaminaDebt' | 'CannotEvade' | 'Chasing' | 'Accurate' | 'DamageBuff' | 'CannotAttack' | 'Evading';
   duration?: number; // 1 means this turn only
 }
 

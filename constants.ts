@@ -1,4 +1,5 @@
 
+
 import { CardDef, CardId, CardType, AbilityStatus, CreatureType, Habitat } from './types';
 
 export const CARDS: Record<string, CardDef> = {
@@ -89,12 +90,13 @@ export const CARDS: Record<string, CardDef> = {
   [CardId.LargeHindLegs]: {
     id: CardId.LargeHindLegs, name: "Large Hind Legs", type: CardType.Physical, abilityStatus: AbilityStatus.None,
     creatureTypes: [CreatureType.Mammal, CreatureType.Avian, CreatureType.Amphibian], habitats: 'All', staminaCost: 1,
-    description: "Flip coin to dodge. Kick: 2 damage if Medium/Big."
+    description: "Kick: 2 damage (Medium/Big). If Small, use to Evade next attack."
   },
   [CardId.BigClaws]: {
     id: CardId.BigClaws, name: "Big Claws", type: CardType.Physical, abilityStatus: AbilityStatus.None,
     creatureTypes: [CreatureType.Mammal, CreatureType.Reptile], habitats: 'All', staminaCost: 1,
-    description: "Can dig, climb, or attack. Deals 3 damage."
+    description: "Upgrade Claw Attack. Deal 3 damage. Can dig/climb.",
+    isUpgrade: true, upgradeTarget: [CardId.ClawAttack]
   },
   [CardId.StrongTail]: {
     id: CardId.StrongTail, name: "Strong Tail", type: CardType.Physical, abilityStatus: AbilityStatus.None,
@@ -140,7 +142,7 @@ export const CARDS: Record<string, CardDef> = {
   [CardId.PoisonSkin]: {
     id: CardId.PoisonSkin, name: "Poison Skin", type: CardType.Physical, abilityStatus: AbilityStatus.None,
     creatureTypes: [CreatureType.Amphibian, CreatureType.Reptile], habitats: 'All', staminaCost: 0,
-    description: "Passive: When attacked, flip coin. Heads = Attacker becomes Poisoned."
+    description: "Passive: When attacked, Attacker automatically becomes Poisoned."
   },
   [CardId.DiveBomb]: {
     id: CardId.DiveBomb, name: "Dive Bomb", type: CardType.Physical, abilityStatus: AbilityStatus.None,
@@ -225,9 +227,9 @@ export const CARDS: Record<string, CardDef> = {
     description: "Flip Coin: Heads = Poison, Tails = Stuck."
   },
   [CardId.Regeneration]: {
-    id: CardId.Regeneration, name: "Regeneration", type: CardType.Ability, abilityStatus: AbilityStatus.None,
+    id: CardId.Regeneration, name: "Regeneration", type: CardType.Ability, abilityStatus: AbilityStatus.ConsumableImpact,
     creatureTypes: [CreatureType.Reptile, CreatureType.Amphibian], habitats: 'All', staminaCost: 2,
-    description: "Heal 4 HP."
+    description: "Heal 4 HP. Consumable."
   },
   [CardId.Focus]: {
     id: CardId.Focus, name: "Focus", type: CardType.Ability, abilityStatus: AbilityStatus.ConsumableImpact,

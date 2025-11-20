@@ -1,4 +1,5 @@
 
+
 import { CARDS, generateDeck, getRandomElement as randomElem } from '../constants';
 import { GameState as GS, PlayerState as PS, CardInstance as CI, CreatureType as CT, Habitat as H, CardType as CType, AbilityStatus as AS, CardDef, GameAction as GA, CardId as CID, GameNotification } from '../types';
 
@@ -478,6 +479,14 @@ export const gameReducer = (state: GS, action: GA): GS => {
              notify("Chasing! Opponent cannot evade.", 'success');
              return newState;
          }
+         
+         // ACTIVE EVASION FOR SMALL CREATURES
+         if (def.id === CID.LargeHindLegs && p.size === 'Small') {
+             p.statuses.push({ type: 'Evading', duration: 1 });
+             log(`${p.name} prepares to evade (Large Hind Legs).`);
+             notify("Evasion ready!", 'success');
+             return newState;
+         }
 
          if (def.id === CID.Camouflage) {
             if (performCoinFlip('Camouflage', getRNG(action.rng, rngIndex++), p.id)) {
@@ -537,6 +546,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
 
          // HIT LOGIC
          const isTargetHidden = target.statuses.some(s => s.type === 'Hidden') || target.statuses.some(s => s.type === 'Camouflaged');
+         const isTargetEvading = target.statuses.some(s => s.type === 'Evading');
          
          if (isTargetHidden && !isAccurate) {
              const hasDetection = p.formation.some(c => c.defId === CID.KeenEyesight || c.defId === CID.Whiskers || c.defId === CID.EnhancedSmell); 
@@ -566,6 +576,10 @@ export const gameReducer = (state: GS, action: GA): GS => {
                  notify("Missed (Water Camo)!", 'warning');
                  hit = false;
              }
+         } else if (isTargetEvading && !isAccurate) {
+             log(`${p.name} missed (Opponent Evading).`);
+             notify("Attack Evaded!", 'warning');
+             hit = false;
          }
 
          if (hit && target.statuses.some(s => s.type === 'Flying') && !isAccurate) {
@@ -649,13 +663,20 @@ export const gameReducer = (state: GS, action: GA): GS => {
                }
             }
             
+            // Poison Skin (Auto)
+            if (target.formation.some(c => c.defId === CID.PoisonSkin)) {
+                p.statuses.push({ type: 'Poisoned' });
+                log(`${p.name} was Poisoned by Poison Skin.`);
+                notify("Poisoned by skin!", 'warning');
+            }
+            
             let finalDmg = Math.max(0, damage - defense);
             target.hp -= finalDmg;
             log(`${p.name} attacked for ${finalDmg} dmg.`);
             notify(`Dealt ${finalDmg} damage!`, 'success');
 
             // On Hit Effects
-            if (def.id === CID.VenomousFangs || (def.id === CID.PoisonSkin && performCoinFlip('Poison Skin', getRNG(action.rng, rngIndex++), p.id))) {
+            if (def.id === CID.VenomousFangs) {
                target.statuses.push({ type: 'Poisoned' });
             }
             
