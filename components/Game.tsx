@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { GameState, PlayerState, CardType, GameAction, CardId, Habitat, CoinFlipEvent, GameNotification, PendingReaction, PendingChoice } from '../types';
 import { CARDS, STATUS_DESCRIPTIONS } from '../constants';
@@ -519,7 +520,7 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
       </div>
 
       {/* SIDEBAR / LOG */}
-      <div className={`fixed inset-0 z-[140] bg-black/95 p-4 md:static md:bg-stone-950 md:w-80 md:border-r md:border-stone-800 md:flex md:flex-col md:min-h-screen ${showLog ? 'flex flex-col' : 'hidden'}`}>
+      <div className={`fixed inset-0 z-[140] bg-black/95 p-4 md:static md:bg-stone-950 md:w-80 md:border-r md:border-stone-800 md:flex md:flex-col md:h-screen ${showLog ? 'flex flex-col' : 'hidden'}`}>
         <div className="flex justify-between items-center mb-4 md:hidden"><h2 className="text-amber-500 font-bold">Game Log</h2><button onClick={() => setShowLog(false)} className="text-white p-2 font-bold text-xl">✕</button></div>
         <div className="hidden md:block mb-6 border-b border-stone-800 pb-4">
            <h1 className="text-2xl font-black text-amber-500 tracking-tight uppercase">Creature Clash</h1>
@@ -529,7 +530,7 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
              <div className={`font-bold text-center py-2 rounded mt-2 text-base md:text-lg tracking-wider shadow-inner ${isMyTurn ? 'bg-green-900/30 text-green-400 border border-green-800' : 'bg-red-900/30 text-red-400 border border-red-800'}`}>{isMyTurn ? 'YOUR TURN' : 'OPPONENT TURN'}</div>
            </div>
         </div>
-        <div className="flex-1 overflow-y-auto scrollbar-hide text-xs font-mono space-y-2 text-stone-400 flex flex-col-reverse px-1" ref={logRef}>{state.log.map((l, i) => <div key={i} className="border-b border-white/5 pb-1 leading-relaxed">{l}</div>)}</div>
+        <div className="flex-1 overflow-y-auto scrollbar-hide text-xs font-mono space-y-2 text-stone-400 px-1" ref={logRef}>{state.log.map((l, i) => <div key={i} className="border-b border-white/5 pb-1 leading-relaxed">{l}</div>)}</div>
       </div>
 
       {/* CENTER STATUS - FIXED POSITION */}
