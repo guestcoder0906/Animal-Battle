@@ -85,6 +85,7 @@ export enum CardId {
   SwiftReflexes = 'swift_reflexes',
   EnhancedSmell = 'enhanced_smell',
   Copycat = 'copycat',
+  Agile = 'agile',
   
   // Special
   Evolve = 'evolve',
@@ -111,7 +112,7 @@ export interface CardInstance {
 }
 
 export interface PlayerStatus {
-  type: 'Grappled' | 'Poisoned' | 'Stuck' | 'Blinded' | 'Confused' | 'Hidden' | 'Flying' | 'Camouflaged' | 'StaminaDebt' | 'CannotEvade' | 'Chasing';
+  type: 'Grappled' | 'Poisoned' | 'Stuck' | 'Blinded' | 'Confused' | 'Hidden' | 'Flying' | 'Camouflaged' | 'StaminaDebt' | 'CannotEvade' | 'Chasing' | 'Accurate';
   duration?: number; // 1 means this turn only
 }
 

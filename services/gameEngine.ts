@@ -234,7 +234,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
                nextPlayer.deck.push(drawn);
             } else {
               // Rules: Size and PASSIVE Physical are played immediately.
-              const isPassiveTrait = def.type === CType.Physical && def.staminaCost === 0 && !def.isUpgrade && def.id !== CID.Camouflage && def.id !== CID.CamouflageWater; 
+              const isPassiveTrait = def.type === CType.Physical && def.staminaCost === 0 && !def.isUpgrade && def.id !== CID.Camouflage && def.id !== CID.CamouflageWater && def.id !== CID.Agile; 
               
               if ((isPassiveTrait && def.id !== CID.Camouflage && def.id !== CID.CamouflageWater) || def.type === CType.Size) {
                    nextPlayer.formation.push(drawn);
@@ -451,7 +451,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
       }
 
       // Exceptions for things that don't count as main action
-      const isFreeAction = def.id === CID.EnhancedSmell || def.id === CID.SwimFast;
+      const isFreeAction = def.id === CID.EnhancedSmell || def.id === CID.SwimFast || (def.id === CID.Agile && action.actionType === 'ABILITY');
 
       if (p.hasActedThisTurn && !isFreeAction) {
          notify("Already acted this turn!", 'error');
@@ -526,6 +526,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
 
          let damage = 0;
          let hit = true;
+         const isAccurate = p.statuses.some(s => s.type === 'Accurate');
          
          // Base Damage
          if (def.id === CID.Bite) damage = 3;
@@ -548,7 +549,8 @@ export const gameReducer = (state: GS, action: GA): GS => {
 
          // HIT LOGIC
          const isTargetHidden = target.statuses.some(s => s.type === 'Hidden') || target.statuses.some(s => s.type === 'Camouflaged');
-         if (isTargetHidden) {
+         
+         if (isTargetHidden && !isAccurate) {
              const hasDetection = p.formation.some(c => c.defId === CID.KeenEyesight || c.defId === CID.Whiskers || c.defId === CID.EnhancedSmell); 
              if (!hasDetection) {
                 if (target.statuses.some(s => s.type === 'Camouflaged')) {
@@ -566,7 +568,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
              } else {
                 log(`${p.name} spotted Hidden target!`);
              }
-         } else if (target.formation.some(c => c.defId === CID.CamouflageWater) && newState.habitat === H.Water) {
+         } else if (target.formation.some(c => c.defId === CID.CamouflageWater) && newState.habitat === H.Water && !isAccurate) {
              // Water Camouflage Logic
              const isChasing = p.statuses.some(s => s.type === 'Chasing');
              if (isChasing) {
@@ -578,7 +580,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
              }
          }
 
-         if (hit && target.statuses.some(s => s.type === 'Flying')) {
+         if (hit && target.statuses.some(s => s.type === 'Flying') && !isAccurate) {
             const flip = performCoinFlip('Hit Flying Target', getRNG(action.rng, rngIndex++), p.id);
             if (!flip) {
                log(`${p.name} missed Flying target.`);
@@ -589,7 +591,19 @@ export const gameReducer = (state: GS, action: GA): GS => {
          // Evasion
          if (hit) {
              const cannotEvade = target.statuses.some(s => s.type === 'CannotEvade');
-             if (!cannotEvade) {
+             
+             // AGILE PASSIVE EVASION
+             if (!cannotEvade && target.formation.some(c => c.defId === CID.Agile) && target.stamina >= 1) {
+                 target.stamina -= 1;
+                 log(`${target.name} used Agile to evade! (-1 Stamina)`);
+                 notify("Agile Evasion!", 'success');
+                 hit = false;
+                 if (target.formation.some(c => c.defId === CID.SwiftReflexes) && target.stamina < target.maxStamina) {
+                     target.stamina += 1;
+                     log(`${target.name} gained Stamina (Swift Reflexes).`);
+                 }
+             }
+             else if (!cannotEvade) {
                 const evades = target.formation.filter(c => c.defId === CID.LargeHindLegs || c.defId === CID.SwimFast);
                 if (evades.length > 0 && !target.statuses.some(s => s.type === 'Grappled')) { 
                     const evadeFlip = performCoinFlip('Evasion Attempt', getRNG(action.rng, rngIndex++), target.id);
@@ -637,7 +651,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
                const hasArmor = p.formation.some(c => c.defId === CID.ArmoredExoskeleton || c.defId === CID.SpikyBody);
                if (!hasArmor) {
                   p.hp -= 1;
-                  log(`${p.name} took 1 dmg (Barbed Quills).`);
+                  log(`${p.name} took 1 recoil damage (Barbed Quills).`);
                   notify(`${p.name} pricked by Quills!`, 'warning');
                } else {
                   log(`${p.name}'s armor protected against Barbed Quills.`);
@@ -733,6 +747,11 @@ export const gameReducer = (state: GS, action: GA): GS => {
                   notify("Failed to steal card.", 'error');
                }
             }
+         }
+         else if (def.id === CID.Agile) {
+             p.statuses.push({ type: 'Accurate', duration: 1 });
+             notify("Agile! Attacks won't miss.", 'success');
+             p.hasActedThisTurn = false; // Free action
          }
          
          // Consumable Removal

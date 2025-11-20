@@ -293,7 +293,7 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
       </div>
       <div className="flex gap-1 overflow-hidden max-w-[100px] md:max-w-[150px] flex-wrap justify-end">
         {p.statuses.map((s, i) => (
-          <span key={i} className={`px-1.5 py-0.5 rounded text-[9px] font-bold border shadow-sm truncate max-w-full ${s.type === 'Poisoned' ? 'bg-green-900 border-green-500 text-green-100' : s.type === 'Grappled' ? 'bg-orange-900 border-orange-500 text-orange-100' : s.type === 'Camouflaged' ? 'bg-cyan-900 border-cyan-500 text-cyan-100' : s.type === 'Hidden' ? 'bg-stone-700 border-stone-500 text-stone-300' : 'bg-purple-900 border-purple-500 text-purple-100'}`}>{s.type}</span>
+          <span key={i} className={`px-1.5 py-0.5 rounded text-[9px] font-bold border shadow-sm truncate max-w-full ${s.type === 'Poisoned' ? 'bg-green-900 border-green-500 text-green-100' : s.type === 'Grappled' ? 'bg-orange-900 border-orange-500 text-orange-100' : s.type === 'Camouflaged' ? 'bg-cyan-900 border-cyan-500 text-cyan-100' : s.type === 'Hidden' ? 'bg-stone-700 border-stone-500 text-stone-300' : s.type === 'Accurate' ? 'bg-yellow-900 border-yellow-500 text-yellow-100' : 'bg-purple-900 border-purple-500 text-purple-100'}`}>{s.type}</span>
         ))}
       </div>
     </div>
@@ -477,4 +477,3 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
       </div>
     </div>
   );
-};
