@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useRef } from 'react';
 import { GameState, PlayerState, CardType, GameAction, CardId, Habitat, CoinFlipEvent, GameNotification, PendingReaction, PendingChoice } from '../types';
 import { CARDS, STATUS_DESCRIPTIONS } from '../constants';
