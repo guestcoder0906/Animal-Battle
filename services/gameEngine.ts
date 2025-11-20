@@ -631,17 +631,19 @@ export const gameReducer = (state: GS, action: GA): GS => {
                   }
                }
             }
-            
-            // Barbed Quills
-            if (def.id === CID.StrongJaw || def.id === CID.GraspingTalons || def.id === CID.DeathRoll) {
-                const quillsIdx = target.formation.findIndex(c => c.defId === CID.BarbedQuills);
-                if (quillsIdx !== -1) {
-                    p.hp -= 2;
-                    log(`${p.name} took 2 dmg (Barbed Quills). Grapple prevented.`);
-                    target.formation.splice(quillsIdx, 1);
-                }
-            }
 
+            // Barbed Quills
+            if (target.formation.some(c => c.defId === CID.BarbedQuills)) {
+               const hasArmor = p.formation.some(c => c.defId === CID.ArmoredExoskeleton || c.defId === CID.SpikyBody);
+               if (!hasArmor) {
+                  p.hp -= 1;
+                  log(`${p.name} took 1 dmg (Barbed Quills).`);
+                  notify(`${p.name} pricked by Quills!`, 'warning');
+               } else {
+                  log(`${p.name}'s armor protected against Barbed Quills.`);
+               }
+            }
+            
             let finalDmg = Math.max(0, damage - defense);
             target.hp -= finalDmg;
             log(`${p.name} attacked for ${finalDmg} dmg.`);

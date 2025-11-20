@@ -155,7 +155,7 @@ export const CARDS: Record<string, CardDef> = {
   [CardId.BarbedQuills]: {
     id: CardId.BarbedQuills, name: "Barbed Quills", type: CardType.Physical, abilityStatus: AbilityStatus.None,
     creatureTypes: [CreatureType.Mammal, CreatureType.Reptile], habitats: 'All', staminaCost: 0,
-    description: "Passive. If attack would cause you to become Grappled, the Grappled effect fails, attacker takes 2 damage, then discard this card."
+    description: "Passive. When attacked, deal 1 damage to attacker unless they have Armored Exoskeleton or Spiky Body."
   },
   [CardId.VenomousFangs]: {
     id: CardId.VenomousFangs, name: "Venomous Fangs", type: CardType.Physical, abilityStatus: AbilityStatus.None,
@@ -227,92 +227,90 @@ export const CARDS: Record<string, CardDef> = {
   [CardId.Regeneration]: {
     id: CardId.Regeneration, name: "Regeneration", type: CardType.Ability, abilityStatus: AbilityStatus.ConsumableImpact,
     creatureTypes: [CreatureType.Reptile, CreatureType.Amphibian], habitats: 'All', staminaCost: 2,
-    description: "Heal 4 HP."
+    description: "Recover 4 HP."
   },
   [CardId.Focus]: {
     id: CardId.Focus, name: "Focus", type: CardType.Ability, abilityStatus: AbilityStatus.ConsumableImpact,
     creatureTypes: 'All', habitats: 'All', staminaCost: 0,
-    description: "Play immediately even if you played a card. Next coin flip this turn is guaranteed Heads. Allows playing another card."
+    description: "Next coin flip is guaranteed Heads. Allows playing one additional card this turn."
   },
   [CardId.AdrenalineRush]: {
     id: CardId.AdrenalineRush, name: "Adrenaline Rush", type: CardType.Ability, abilityStatus: AbilityStatus.ConsumableImpact,
-    creatureTypes: [CreatureType.Mammal], habitats: 'All', staminaCost: 0,
-    description: "Gain 1 Stamina immediately. Lose 1 Stamina next turn."
+    creatureTypes: [CreatureType.Mammal, CreatureType.Avian], habitats: 'All', staminaCost: 0,
+    description: "Gain +1 Stamina immediately. You start next turn with 1 less Stamina."
   },
   [CardId.StickyTongue]: {
-    id: CardId.StickyTongue, name: "Sticky Tongue", type: CardType.Ability, abilityStatus: AbilityStatus.PermanentUtility,
-    creatureTypes: [CreatureType.Amphibian, CreatureType.Reptile], habitats: 'All', staminaCost: 1,
-    description: "Flip coin. Heads = Opponent Stuck. Small opponents take 1 damage."
+    id: CardId.StickyTongue, name: "Sticky Tongue", type: CardType.Ability, abilityStatus: AbilityStatus.ConsumableImpact,
+    creatureTypes: [CreatureType.Reptile, CreatureType.Amphibian], habitats: 'All', staminaCost: 1,
+    description: "Flip coin. Heads = Opponent is Stuck. If opponent is Small, deal 1 damage."
   },
   [CardId.ShedSkin]: {
     id: CardId.ShedSkin, name: "Shed Skin", type: CardType.Ability, abilityStatus: AbilityStatus.ConsumableImpact,
-    creatureTypes: [CreatureType.Reptile], habitats: 'All', staminaCost: 1,
-    description: "Remove all negative status effects."
+    creatureTypes: [CreatureType.Reptile, CreatureType.Amphibian], habitats: 'All', staminaCost: 1,
+    description: "Remove all status effects from yourself."
   },
   [CardId.Rage]: {
-    id: CardId.Rage, name: "Rage", type: CardType.Ability, abilityStatus: AbilityStatus.PermanentUtility,
-    creatureTypes: [CreatureType.Mammal], habitats: 'All', staminaCost: 1,
-    description: "Reset action flag (allows attacking again if stamina permits)."
+    id: CardId.Rage, name: "Rage", type: CardType.Ability, abilityStatus: AbilityStatus.ConsumableImpact,
+    creatureTypes: [CreatureType.Mammal, CreatureType.Reptile], habitats: 'All', staminaCost: 1,
+    description: "Free Action. Can act again this turn."
   },
   [CardId.TerritorialDisplay]: {
     id: CardId.TerritorialDisplay, name: "Territorial Display", type: CardType.Ability, abilityStatus: AbilityStatus.ConsumableImpact,
     creatureTypes: [CreatureType.Mammal, CreatureType.Avian, CreatureType.Reptile], habitats: 'All', staminaCost: 2,
-    description: "Flip coin. Heads = Opponent discards their hand."
+    description: "Flip coin. Heads = Opponent discards their entire hand."
   },
   [CardId.Mimicry]: {
-     id: CardId.Mimicry, name: "Mimicry", type: CardType.Ability, abilityStatus: AbilityStatus.PermanentUtility,
-     creatureTypes: [CreatureType.Avian], habitats: 'All', staminaCost: 1,
-     description: "Copies the last played Ability of opponent."
+    id: CardId.Mimicry, name: "Mimicry", type: CardType.Ability, abilityStatus: AbilityStatus.ConsumableImpact,
+    creatureTypes: [CreatureType.Avian], habitats: 'All', staminaCost: 1,
+    description: "Copy the last ability used by opponent."
   },
   [CardId.ExhaustingRoar]: {
     id: CardId.ExhaustingRoar, name: "Exhausting Roar", type: CardType.Ability, abilityStatus: AbilityStatus.ConsumableImpact,
-    creatureTypes: [CreatureType.Mammal], habitats: 'All', staminaCost: 1,
+    creatureTypes: [CreatureType.Mammal], habitats: 'All', staminaCost: 2,
     description: "Flip coin. Heads = Opponent loses 1 Stamina."
   },
   [CardId.SwiftReflexes]: {
     id: CardId.SwiftReflexes, name: "Swift Reflexes", type: CardType.Ability, abilityStatus: AbilityStatus.PermanentUtility,
-    creatureTypes: [CreatureType.Mammal, CreatureType.Avian], habitats: 'All', staminaCost: 1,
-    description: "Passive. If you successfully Evade, gain 1 Stamina."
+    creatureTypes: [CreatureType.Mammal, CreatureType.Avian, CreatureType.Reptile], habitats: 'All', staminaCost: 0,
+    description: "Passive: When you successfully Evade an attack, recover 1 Stamina."
   },
   [CardId.EnhancedSmell]: {
     id: CardId.EnhancedSmell, name: "Enhanced Smell", type: CardType.Ability, abilityStatus: AbilityStatus.PermanentUtility,
-    creatureTypes: [CreatureType.Mammal], habitats: 'All', staminaCost: 0,
-    description: "Reveal Hidden/Camouflaged opponent. Does not count as action."
+    creatureTypes: [CreatureType.Mammal, CreatureType.Reptile], habitats: 'All', staminaCost: 0,
+    description: "Free Action. Reveal a Hidden opponent."
   },
   [CardId.Copycat]: {
     id: CardId.Copycat, name: "Copycat", type: CardType.Ability, abilityStatus: AbilityStatus.ConsumableImpact,
     creatureTypes: [CreatureType.Avian], habitats: 'All', staminaCost: 2,
     description: "Steal a card from opponent's hand."
-  }
+  },
 };
 
-export const getRandomElement = <T>(items: T[]): T => {
-  return items[Math.floor(Math.random() * items.length)];
+export const getRandomElement = <T>(arr: T[]): T => {
+  return arr[Math.floor(Math.random() * arr.length)];
 };
 
 export const generateDeck = (creatureType: CreatureType, size: 'Small' | 'Medium' | 'Big'): CardDef[] => {
   const deck: CardDef[] = [];
   
-  // Add Size Card
-  const sizeId = size === 'Small' ? CardId.SmallSize : size === 'Medium' ? CardId.MediumSize : CardId.BigSize;
-  if (CARDS[sizeId]) {
-    deck.push(CARDS[sizeId]);
+  // 1. Add Size Card
+  const sizeCardId = size === 'Small' ? CardId.SmallSize : size === 'Medium' ? CardId.MediumSize : CardId.BigSize;
+  if (CARDS[sizeCardId]) {
+    deck.push(CARDS[sizeCardId]);
   }
 
-  // Add other valid cards
+  // 2. Add other valid cards
   Object.values(CARDS).forEach(card => {
-    if (card.type === CardType.Size) return; // Skip size cards, we added the specific one
+    if (card.type === CardType.Size) return; // Already added specific size
+    if (card.id === CardId.Evolve && Math.random() > 0.5) return; // 50% chance to have Evolve in deck? Or just add it. Let's add it.
 
-    // Check creature type compatibility
-    if (card.creatureTypes !== 'All' && !card.creatureTypes.includes(creatureType)) {
-      return;
-    }
+    // Filter by Creature Type
+    if (card.creatureTypes !== 'All' && !card.creatureTypes.includes(creatureType)) return;
 
-    // Check size restrictions
-    if (card.id === CardId.CrushingWeight && size !== 'Big') {
-      return;
-    }
-
+    // Filter by Size Restrictions
+    if (card.id === CardId.CrushingWeight && size !== 'Big') return;
+    
+    // Add to deck
     deck.push(card);
   });
 
