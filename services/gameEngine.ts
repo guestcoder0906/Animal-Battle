@@ -234,9 +234,9 @@ export const gameReducer = (state: GS, action: GA): GS => {
                nextPlayer.deck.push(drawn);
             } else {
               // Rules: Size and PASSIVE Physical are played immediately.
-              const isPassiveTrait = def.type === CType.Physical && def.staminaCost === 0 && !def.isUpgrade && def.id !== CID.Camouflage; 
+              const isPassiveTrait = def.type === CType.Physical && def.staminaCost === 0 && !def.isUpgrade && def.id !== CID.Camouflage && def.id !== CID.CamouflageWater; 
               
-              if ((isPassiveTrait && def.id !== CID.Camouflage) || def.type === CType.Size) {
+              if ((isPassiveTrait && def.id !== CID.Camouflage && def.id !== CID.CamouflageWater) || def.type === CType.Size) {
                    nextPlayer.formation.push(drawn);
                    if (def.id === CID.StrongBuild) { nextPlayer.hp += 2; nextPlayer.maxHp += 2; }
                    log(`${nextPlayer.name} drew & played ${def.name} (Passive).`);
@@ -355,8 +355,6 @@ export const gameReducer = (state: GS, action: GA): GS => {
           // 2. Allows playing another card.
           // Since we just "played" Focus (which might have bypassed the limit),
           // we want to ensure the counter allows exactly one more card relative to before Focus.
-          // If count was 0, we play Focus -> count 0.
-          // If count was 1, we play Focus -> count 0.
           if (p.cardsPlayedThisTurn > 0) {
               p.cardsPlayedThisTurn--;
           }
@@ -452,7 +450,10 @@ export const gameReducer = (state: GS, action: GA): GS => {
          return state;
       }
 
-      if (p.hasActedThisTurn && def.id !== CID.EnhancedSmell) {
+      // Exceptions for things that don't count as main action
+      const isFreeAction = def.id === CID.EnhancedSmell || def.id === CID.SwimFast;
+
+      if (p.hasActedThisTurn && !isFreeAction) {
          notify("Already acted this turn!", 'error');
          return state;
       }
@@ -477,7 +478,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
       }
 
       p.stamina -= def.staminaCost;
-      if (def.id !== CID.Rage && def.id !== CID.EnhancedSmell) {
+      if (def.id !== CID.Rage && !isFreeAction) {
         p.hasActedThisTurn = true;
       }
 
@@ -486,6 +487,16 @@ export const gameReducer = (state: GS, action: GA): GS => {
       // -- ATTACK (and Physical Utility) --
       if (action.actionType === 'ATTACK') {
          // Handle Physical Utilities that don't deal standard damage
+         
+         if (def.id === CID.SwimFast) {
+             // Active Chase ability
+             p.statuses.push({ type: 'Chasing' });
+             target.statuses.push({ type: 'CannotEvade', duration: 1 });
+             log(`${p.name} is Chasing! Opponent cannot evade.`);
+             notify("Chasing! Opponent cannot evade.", 'success');
+             return newState;
+         }
+
          if (def.id === CID.Camouflage) {
             if (performCoinFlip('Camouflage', getRNG(action.rng, rngIndex++), p.id)) {
                p.statuses.push({ type: 'Camouflaged' });
@@ -532,6 +543,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
 
          if (p.formation.some(c => c.defId === CID.StrongBuild)) damage += 1;
          if (newState.habitat === H.Water && p.formation.some(c => c.defId === CID.SwimsWell)) damage += 2;
+         if (newState.habitat === H.Water && p.formation.some(c => c.defId === CID.SwimFast)) damage += 2; // Swim Fast Bonus
          if (newState.habitat === H.Water && p.creatureType === CT.Amphibian) damage += 1;
 
          // HIT LOGIC
@@ -555,9 +567,13 @@ export const gameReducer = (state: GS, action: GA): GS => {
                 log(`${p.name} spotted Hidden target!`);
              }
          } else if (target.formation.some(c => c.defId === CID.CamouflageWater) && newState.habitat === H.Water) {
-             const flip = performCoinFlip('Water Camouflage', getRNG(action.rng, rngIndex++), p.id);
-             if (!flip) {
-                 log(`${p.name} missed (Water Ambush).`);
+             // Water Camouflage Logic
+             const isChasing = p.statuses.some(s => s.type === 'Chasing');
+             if (isChasing) {
+                 log(`${p.name} chases through Water Camouflage!`);
+             } else {
+                 log(`${p.name} missed (Water Camouflage).`);
+                 notify("Missed (Water Camo)!", 'warning');
                  hit = false;
              }
          }
@@ -572,7 +588,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
 
          // Evasion
          if (hit) {
-             const cannotEvade = target.statuses.some(s => s.type === 'CannotEvade') || (def.id === CID.AmbushAttack && false); // Ambush handled above
+             const cannotEvade = target.statuses.some(s => s.type === 'CannotEvade');
              if (!cannotEvade) {
                 const evades = target.formation.filter(c => c.defId === CID.LargeHindLegs || c.defId === CID.SwimFast);
                 if (evades.length > 0 && !target.statuses.some(s => s.type === 'Grappled')) { 

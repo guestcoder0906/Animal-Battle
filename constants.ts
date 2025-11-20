@@ -115,12 +115,12 @@ export const CARDS: Record<string, CardDef> = {
   [CardId.CamouflageWater]: {
     id: CardId.CamouflageWater, name: "Camouflage in Water", type: CardType.Physical, abilityStatus: AbilityStatus.None,
     creatureTypes: [CreatureType.Reptile, CreatureType.Amphibian], habitats: [Habitat.Water], staminaCost: 0,
-    description: "Ambush; opponent must flip coin to hit: heads = hit, tails = miss."
+    description: "Passive: In Water, attacks against you miss automatically unless opponent is Chasing."
   },
   [CardId.SwimFast]: {
     id: CardId.SwimFast, name: "Swim Fast", type: CardType.Physical, abilityStatus: AbilityStatus.None,
     creatureTypes: [CreatureType.Reptile, CreatureType.Amphibian], habitats: [Habitat.Water], staminaCost: 1,
-    description: "Flip coin to evade attacks or chase opponent; heads = evade."
+    description: "Passive: +2 Damage in Water. Active (Chase): 1 Stamina. Opponent cannot evade this turn. Counters Water Camouflage."
   },
   [CardId.AmbushAttack]: {
     id: CardId.AmbushAttack, name: "Ambush Attack", type: CardType.Physical, abilityStatus: AbilityStatus.None,

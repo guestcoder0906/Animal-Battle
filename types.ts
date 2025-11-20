@@ -111,7 +111,7 @@ export interface CardInstance {
 }
 
 export interface PlayerStatus {
-  type: 'Grappled' | 'Poisoned' | 'Stuck' | 'Blinded' | 'Confused' | 'Hidden' | 'Flying' | 'Camouflaged' | 'StaminaDebt' | 'CannotEvade';
+  type: 'Grappled' | 'Poisoned' | 'Stuck' | 'Blinded' | 'Confused' | 'Hidden' | 'Flying' | 'Camouflaged' | 'StaminaDebt' | 'CannotEvade' | 'Chasing';
   duration?: number; // 1 means this turn only
 }
 
