@@ -453,6 +453,12 @@ export const gameReducer = (state: GS, action: GA): GS => {
           }
       }
 
+      // Check CannotAttack status
+      if (action.actionType === 'ATTACK' && p.statuses.some(s => s.type === 'CannotAttack')) {
+          notify("You cannot attack this turn (Roared)!", 'error');
+          return state;
+      }
+
       p.stamina -= def.staminaCost;
       if (!isFreeAction) {
         p.hasActedThisTurn = true;
@@ -631,9 +637,12 @@ export const gameReducer = (state: GS, action: GA): GS => {
             // Barbed Quills
             if (target.formation.some(c => c.defId === CID.BarbedQuills)) {
                const hasArmor = p.formation.some(c => c.defId === CID.ArmoredExoskeleton || c.defId === CID.SpikyBody);
+               const isGrappled = target.statuses.some(s => s.type === 'Grappled');
+               
                if (!hasArmor) {
-                  p.hp -= 1;
-                  log(`${p.name} took 1 recoil damage (Barbed Quills).`);
+                  const recoilDamage = isGrappled ? 2 : 1;
+                  p.hp -= recoilDamage;
+                  log(`${p.name} took ${recoilDamage} recoil damage (Barbed Quills).`);
                   notify(`${p.name} pricked by Quills!`, 'warning');
                } else {
                   log(`${p.name}'s armor protected against Barbed Quills.`);
@@ -667,6 +676,15 @@ export const gameReducer = (state: GS, action: GA): GS => {
 
          if (def.id === CID.Hibernate) {
             if (p.hp < p.maxHp - 2) p.hp += 2; else p.stamina += 1;
+         }
+         else if (def.id === CID.Roar) {
+            if (performCoinFlip('Roar Intimidation', getRNG(action.rng, rngIndex++), p.id)) {
+               // Duration 2 ensures it survives the End Turn decrement and lasts through the opponent's upcoming turn
+               target.statuses.push({ type: 'CannotAttack', duration: 2 });
+               notify("Roar successful! Opponent cannot attack.", 'success');
+            } else {
+               notify("Roar failed.", 'warning');
+            }
          }
          else if (def.id === CID.Regeneration) {
             p.hp = Math.min(p.maxHp, p.hp + 4);

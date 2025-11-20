@@ -155,7 +155,7 @@ export const CARDS: Record<string, CardDef> = {
   [CardId.BarbedQuills]: {
     id: CardId.BarbedQuills, name: "Barbed Quills", type: CardType.Physical, abilityStatus: AbilityStatus.None,
     creatureTypes: [CreatureType.Mammal], habitats: 'All', staminaCost: 0,
-    description: "Passive: Deal 1 damage to attacker when hit, unless attacker has Armored Exoskeleton or Spiky Body."
+    description: "Passive: Deal 1 damage to attacker when hit. If Grappled, deal 2 damage instead."
   },
   [CardId.VenomousFangs]: {
     id: CardId.VenomousFangs, name: "Venomous Fangs", type: CardType.Physical, abilityStatus: AbilityStatus.None,
@@ -202,7 +202,7 @@ export const CARDS: Record<string, CardDef> = {
   [CardId.Roar]: {
     id: CardId.Roar, name: "Roar", type: CardType.Ability, abilityStatus: AbilityStatus.None,
     creatureTypes: [CreatureType.Mammal, CreatureType.Reptile], habitats: 'All', staminaCost: 1,
-    description: "Intimidate opponent."
+    description: "Flip Coin: Heads = Opponent cannot attack next turn."
   },
   [CardId.Hibernate]: {
     id: CardId.Hibernate, name: "Hibernate", type: CardType.Ability, abilityStatus: AbilityStatus.None,
