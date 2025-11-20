@@ -58,11 +58,12 @@ export const computeAiActions = (state: GameState, aiId: string): GameAction[] =
 
     if (canEvolve) {
         // Evolve logic: Swap a weak formation card for a strong hand card
-        // Find weakest card in formation (simplified: random or non-upgraded small card)
-        const formationTarget = ai.formation[0]; // Just take the first one for simplicity, or prioritize weak
+        // Find weakest card in formation (prioritize low stamina cost or passive)
+        const formationTarget = [...ai.formation].sort((a, b) => CARDS[a.defId].staminaCost - CARDS[b.defId].staminaCost)[0];
         
         // Find strongest card in hand (not the Evolve card itself)
-        const handTarget = ai.hand.filter((c, idx) => idx !== evolveCardIndex)[0];
+        const validHandCards = ai.hand.filter((c, idx) => idx !== evolveCardIndex && c.defId !== CardId.Evolve);
+        const handTarget = [...validHandCards].sort((a, b) => CARDS[b.defId].staminaCost - CARDS[a.defId].staminaCost)[0];
 
         if (formationTarget && handTarget) {
             actions.push({
@@ -73,7 +74,8 @@ export const computeAiActions = (state: GameState, aiId: string): GameAction[] =
                 replacementHandId: handTarget.instanceId
             });
             currentStamina -= 2;
-            // No card played instance for normal action, but we did swap cards
+            // No card played instance for normal action, but we did swap cards.
+            // We won't play another card this turn (Evolve counts as the play).
         }
     } else {
 
@@ -105,28 +107,38 @@ export const computeAiActions = (state: GameState, aiId: string): GameAction[] =
         const validCards = ai.hand.filter(c => {
             const def = CARDS[c.defId];
             const typeMatch = def.creatureTypes === 'All' || def.creatureTypes.includes(ai.creatureType);
+            // Explicitly filter out Evolve so it doesn't try to play it as a normal card
             return typeMatch && !def.isUpgrade && def.id !== CardId.Evolve;
         });
 
         if (validCards.length > 0) {
-            // Heuristic: Play Physical if few physicals, else Ability
+            // Check limits before playing
             const physCount = ai.formation.filter(c => CARDS[c.defId].type === CardType.Physical).length;
-            
-            // Prefer adding Physical cards if we have few
-            let chosen = validCards.find(c => CARDS[c.defId].type === CardType.Physical);
-            if (!chosen || physCount >= 2) {
-                // Else take any ability
-                chosen = validCards.find(c => CARDS[c.defId].type === CardType.Ability) || validCards[0];
-            }
-            
-            if (chosen) {
-            actions.push({
-                type: 'PLAY_CARD',
-                playerId: aiId,
-                cardInstanceId: chosen.instanceId
+            const abilCount = ai.formation.filter(c => CARDS[c.defId].type === CardType.Ability).length;
+
+            const playables = validCards.filter(c => {
+                const def = CARDS[c.defId];
+                if (def.type === CardType.Physical && physCount >= 5) return false;
+                if (def.type === CardType.Ability && abilCount >= 5) return false;
+                return true;
             });
-            cardPlayedInstance = chosen;
-            // Play card doesn't cost stamina usually unless upgrade
+
+            if (playables.length > 0) {
+                // Heuristic: Play Physical if few physicals, else Ability
+                let chosen = playables.find(c => CARDS[c.defId].type === CardType.Physical);
+                if (!chosen || physCount >= 2) {
+                    // Else take any ability
+                    chosen = playables.find(c => CARDS[c.defId].type === CardType.Ability) || playables[0];
+                }
+                
+                if (chosen) {
+                    actions.push({
+                        type: 'PLAY_CARD',
+                        playerId: aiId,
+                        cardInstanceId: chosen.instanceId
+                    });
+                    cardPlayedInstance = chosen;
+                }
             }
         }
         }

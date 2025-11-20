@@ -111,7 +111,10 @@ export const gameReducer = (state: GS, action: GA): GS => {
       else if (def.id === CID.ClawAttack) damage = 2;
       else if (def.id === CID.GraspingTalons) damage = 2;
       else if (def.id === CID.VenomousFangs) damage = 1;
-      else if (def.id === CID.DiveBomb) damage = 4;
+      else if (def.id === CID.DiveBomb) {
+          damage = 2;
+          if (attacker.statuses.some(s => s.type === 'Flying')) damage = 4;
+      }
       else if (def.id === CID.StrongTail) damage = 2;
       else if (def.id === CID.BigClaws) damage = 3;
       else if (def.id === CID.PiercingBeak) damage = 2;
@@ -122,7 +125,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
 
       // Modifiers
       if (attacker.formation.some(c => c.defId === CID.StrongBuild)) damage += 1;
-      if (newState.habitat === H.Water && attacker.formation.some(c => c.defId === CID.SwimsWell)) damage += 2;
+      if (newState.habitat === H.Water && attacker.formation.some(c => c.defId === CID.SwimsWell)) damage += 1;
       if (newState.habitat === H.Water && attacker.formation.some(c => c.defId === CID.SwimFast)) damage += 2; // Swim Fast Bonus
       if (newState.habitat === H.Water && attacker.creatureType === CT.Amphibian) damage += 1;
       
@@ -336,10 +339,22 @@ export const gameReducer = (state: GS, action: GA): GS => {
               const isPassiveTrait = def.type === CType.Physical && def.staminaCost === 0 && !def.isUpgrade && def.id !== CID.Camouflage && def.id !== CID.CamouflageWater && def.id !== CID.Agile; 
               
               if ((isPassiveTrait && def.id !== CID.Camouflage && def.id !== CID.CamouflageWater) || def.type === CType.Size) {
-                   nextPlayer.formation.push(drawn);
-                   if (def.id === CID.StrongBuild) { nextPlayer.hp += 2; nextPlayer.maxHp += 2; }
-                   log(`${nextPlayer.name} drew & played ${def.name} (Passive).`);
-                   notify(`${def.name} auto-played`, 'info');
+                   // Check MAX LIMITS for Auto-Play Passives
+                   const physicalCount = nextPlayer.formation.filter(c => CARDS[c.defId].type === CType.Physical).length;
+                   const abilityCount = nextPlayer.formation.filter(c => CARDS[c.defId].type === CType.Ability).length;
+
+                   if (def.type === CType.Physical && physicalCount >= 5) {
+                       log(`${nextPlayer.name} drew ${def.name} but formation full (Added to Hand).`);
+                       nextPlayer.hand.push(drawn);
+                   } else if (def.type === CType.Ability && abilityCount >= 5) {
+                       log(`${nextPlayer.name} drew ${def.name} but formation full (Added to Hand).`);
+                       nextPlayer.hand.push(drawn);
+                   } else {
+                       nextPlayer.formation.push(drawn);
+                       if (def.id === CID.StrongBuild) { nextPlayer.hp += 2; nextPlayer.maxHp += 2; }
+                       log(`${nextPlayer.name} drew & played ${def.name} (Passive).`);
+                       notify(`${def.name} auto-played`, 'info');
+                   }
               } else {
                 nextPlayer.hand.push(drawn);
                 log(`${nextPlayer.name} drew a card.`);
@@ -417,6 +432,19 @@ export const gameReducer = (state: GS, action: GA): GS => {
          notify(`Upgraded to ${def.name}`, 'success');
          p.cardsPlayedThisTurn++;
          return newState;
+      }
+
+      // MAX CARD LIMIT CHECK
+      const physicalCount = p.formation.filter(c => CARDS[c.defId].type === CType.Physical).length;
+      const abilityCount = p.formation.filter(c => CARDS[c.defId].type === CType.Ability).length;
+
+      if (def.type === CType.Physical && physicalCount >= 5) {
+         notify("Max 5 Physical cards active! Use Evolve or Upgrade.", 'error');
+         return state;
+      }
+      if (def.type === CType.Ability && abilityCount >= 5) {
+         notify("Max 5 Ability cards active! Use Evolve or Upgrade.", 'error');
+         return state;
       }
 
       // Limit cards played (unless exceptions exist, currently none standard except passives which auto-play)
@@ -524,7 +552,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
       }
 
       // Exceptions for things that don't count as main action
-      const isFreeAction = def.id === CID.EnhancedSmell || def.id === CID.SwimFast || 
+      const isFreeAction = def.id === CID.EnhancedSmell || def.id === CID.SwimFast || def.id === CID.ShortBurst ||
                            ((def.id === CID.Agile || def.id === CID.Focus || def.id === CID.Rage || def.id === CID.AdrenalineRush) && action.actionType === 'ABILITY');
 
       if (p.hasActedThisTurn && !isFreeAction) {
@@ -640,17 +668,19 @@ export const gameReducer = (state: GS, action: GA): GS => {
                 log(`${p.name} spotted Hidden target!`);
              }
          } else if (target.formation.some(c => c.defId === CID.CamouflageWater) && newState.habitat === H.Water && !isAccurate) {
-             // Water Camouflage Logic
+             // Water Camouflage Logic (Updated to attacker coin flip)
              const isChasing = p.statuses.some(s => s.type === 'Chasing');
              if (isChasing) {
                  log(`${p.name} chases through Water Camouflage!`);
              } else {
-                 // Attack Misses if Attacker flips Tails
-                 const flip = performCoinFlip('Attack Water Camo', getRNG(action.rng, rngIndex++), p.id);
+                 // Attacker flips coin. Heads = Hit, Tails = Miss.
+                 const flip = performCoinFlip('Water Camo (Attacker)', getRNG(action.rng, rngIndex++), p.id);
                  if (!flip) {
                      log(`${p.name} missed (Water Camouflage).`);
                      notify("Missed (Water Camo)!", 'warning');
                      hit = false;
+                 } else {
+                     log(`${p.name} hit through Water Camouflage!`);
                  }
              }
          } else if (isTargetEvading && !isAccurate) {
@@ -711,6 +741,10 @@ export const gameReducer = (state: GS, action: GA): GS => {
 
          if (def.id === CID.Hibernate) {
             if (p.hp < p.maxHp - 2) p.hp += 2; else p.stamina += 1;
+         }
+         else if (def.id === CID.ShortBurst) {
+            p.stamina += 1;
+            notify("Short Burst! +1 Stamina.", 'success');
          }
          else if (def.id === CID.Roar) {
             if (performCoinFlip('Roar Intimidation', getRNG(action.rng, rngIndex++), p.id)) {

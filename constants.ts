@@ -79,7 +79,7 @@ export const CARDS: Record<string, CardDef> = {
   [CardId.SwimsWell]: {
     id: CardId.SwimsWell, name: "Swims Well", type: CardType.Physical, abilityStatus: AbilityStatus.None,
     creatureTypes: [CreatureType.Mammal, CreatureType.Amphibian], habitats: [Habitat.Water], staminaCost: 0,
-    description: "+2 damage in Water habitat."
+    description: "+1 damage in Water habitat."
   },
   [CardId.StrongBuild]: {
     id: CardId.StrongBuild, name: "Strong Build", type: CardType.Physical, abilityStatus: AbilityStatus.None,
@@ -146,7 +146,7 @@ export const CARDS: Record<string, CardDef> = {
   [CardId.DiveBomb]: {
     id: CardId.DiveBomb, name: "Dive Bomb", type: CardType.Physical, abilityStatus: AbilityStatus.None,
     creatureTypes: [CreatureType.Avian], habitats: 'All', staminaCost: 2,
-    description: "Deal 4 damage. Bypasses armor defenses."
+    description: "Deal 2 damage. If Flying, deal 4 damage. Bypasses armor defenses."
   },
   [CardId.PiercingBeak]: {
     id: CardId.PiercingBeak, name: "Piercing Beak", type: CardType.Physical, abilityStatus: AbilityStatus.None,
@@ -176,9 +176,9 @@ export const CARDS: Record<string, CardDef> = {
 
   // --- ABILITIES ---
   [CardId.ShortBurst]: {
-    id: CardId.ShortBurst, name: "Short Burst", type: CardType.Ability, abilityStatus: AbilityStatus.None,
+    id: CardId.ShortBurst, name: "Short Burst", type: CardType.Ability, abilityStatus: AbilityStatus.ConsumableImpact,
     creatureTypes: 'All', habitats: 'All', staminaCost: 0,
-    description: "Gain +1 Stamina this turn."
+    description: "Free Action. Gain +1 Stamina this turn. Consumable."
   },
   [CardId.Confuse]: {
     id: CardId.Confuse, name: "Confuse", type: CardType.Ability, abilityStatus: AbilityStatus.None,
