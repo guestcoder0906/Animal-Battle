@@ -1,3 +1,4 @@
+
 import { CardDef, CardId, CardType, AbilityStatus, CreatureType, Habitat } from './types';
 
 export const CARDS: Record<string, CardDef> = {
@@ -77,9 +78,9 @@ export const CARDS: Record<string, CardDef> = {
     isUpgrade: true, upgradeTarget: [CardId.Fur]
   },
   [CardId.StandOnHindLegs]: {
-    id: CardId.StandOnHindLegs, name: "Stand on Hind Legs", type: CardType.Physical, abilityStatus: AbilityStatus.None,
-    creatureTypes: [CreatureType.Mammal], habitats: 'All', staminaCost: 0,
-    description: "Intimidation; opponent flips coin before attacking: tails = opponent loses attack."
+    id: CardId.StandOnHindLegs, name: "Stand on Hind Legs", type: CardType.Ability, abilityStatus: AbilityStatus.ConsumableImpact,
+    creatureTypes: [CreatureType.Mammal], habitats: 'All', staminaCost: 1,
+    description: "Intimidation (1 Turn). Opponent flips coin before attacking: Tails = Attack Misses."
   },
   [CardId.SwimsWell]: {
     id: CardId.SwimsWell, name: "Swims Well", type: CardType.Physical, abilityStatus: AbilityStatus.None,
@@ -318,7 +319,8 @@ export const STATUS_DESCRIPTIONS: Record<string, string> = {
   'StaminaDebt': 'Lose 1 Stamina at start of turn.',
   'Evading': 'Next incoming attack will miss.',
   'Chasing': 'Ignores target evasion and stealth.',
-  'Climbing': 'Evades attacks from non-flying opponents.'
+  'Climbing': 'Evades attacks from non-flying opponents.',
+  'Intimidating': 'Opponent has 50% chance to miss attacks against you.',
 };
 
 export const getRandomElement = <T>(arr: T[]): T => {

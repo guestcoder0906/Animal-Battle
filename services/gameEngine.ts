@@ -1,3 +1,5 @@
+
+
 import { CARDS, generateDeck, getRandomElement as randomElem } from '../constants';
 import { GameState as GS, PlayerState as PS, CardInstance as CI, CreatureType as CT, Habitat as H, CardType as CType, AbilityStatus as AS, CardDef, GameAction as GA, CardId as CID, GameNotification, StatusEffect } from '../types';
 
@@ -82,6 +84,38 @@ export const gameReducer = (state: GS, action: GA): GS => {
 
   const log = (msg: string) => {
     newState.log.unshift(`[T${newState.turn}] ${msg}`);
+  };
+
+  // Helper to check game over state
+  const checkWin = () => {
+    if (newState.winner) return; // Already ended
+    
+    const players = Object.values(newState.players);
+    // Check if anyone is dead
+    const deadPlayers = players.filter(p => p.hp <= 0);
+    
+    if (deadPlayers.length > 0) {
+       // If both die? Draw? Or current player wins? Usually last standing.
+       // Simple logic: if opponent dies, current player wins.
+       
+       const opponentId = Object.keys(newState.players).find(id => id !== newState.currentPlayer);
+       const currentPlayer = newState.players[newState.currentPlayer];
+       const opponent = opponentId ? newState.players[opponentId] : null;
+
+       if (opponent && opponent.hp <= 0) {
+           newState.winner = currentPlayer.id;
+           log(`GAME OVER! ${currentPlayer.name} WINS!`);
+       } else if (currentPlayer.hp <= 0) {
+           if (opponent) {
+               newState.winner = opponent.id;
+               log(`GAME OVER! ${opponent.name} WINS!`);
+           }
+       }
+       
+       if (newState.winner) {
+           newState.phase = 'end';
+       }
+    }
   };
 
   // Helper to prevent status stacking
@@ -253,6 +287,8 @@ export const gameReducer = (state: GS, action: GA): GS => {
       if (def.id === CID.DeathRoll && performCoinFlip('Death Roll', getRNG(rng, rngIndex++), attacker.id)) {
           addStatus(target, { type: 'Grappled' });
       }
+
+      checkWin();
   };
 
   switch (action.type) {
@@ -359,6 +395,9 @@ export const gameReducer = (state: GS, action: GA): GS => {
               notify("Healed from Leech!", 'success');
           }
       }
+
+      // Check game over after Turn Start damage (poison/leech)
+      checkWin();
 
       // Clear Duration based statuses
       nextPlayer.statuses = nextPlayer.statuses.filter(s => {
@@ -511,6 +550,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
 
         // Find valid upgrade
         const allCards = Object.values(CARDS);
+        // Strict check to ensure we find the upgrade that targets exactly this card ID
         const upgradeDef = allCards.find(c => c.isUpgrade && c.upgradeTarget?.includes(targetDef.id));
 
         if (!upgradeDef) {
@@ -617,6 +657,8 @@ export const gameReducer = (state: GS, action: GA): GS => {
       
       log(`${p.name} played ${def.name}.`);
       notify(`Played ${def.name}`, 'success');
+      
+      checkWin(); // Check if recoil damage (if added later) or immediate effects killed anyone
       return newState;
     }
 
@@ -710,6 +752,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
              notify("Used Climb (Climbing Status)", 'success');
         }
 
+        checkWin();
         return newState;
     }
 
@@ -736,6 +779,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
             resolveAttackDamage(attacker, target, def, action.rng);
         }
         
+        checkWin();
         return newState;
     }
 
@@ -798,6 +842,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
                 log(`${p.name} is confused and hurt themselves!`);
                 p.hp -= 1;
                 notify("Confusion caused self-harm!", 'error');
+                checkWin();
                 return newState;
             }
         }
@@ -925,9 +970,9 @@ export const gameReducer = (state: GS, action: GA): GS => {
                         return newState;
                     }
                 }
-                // Stand on Hind Legs
-                if (target.formation.some(c => c.defId === CID.StandOnHindLegs)) {
-                     if (!performCoinFlip('Intimidation', getRNG(action.rng, rngIndex++), p.id)) {
+                // Intimidating Stance (Stand on Hind Legs)
+                if (target.statuses.some(s => s.type === 'Intimidating')) {
+                     if (!performCoinFlip('Intimidating Stance', getRNG(action.rng, rngIndex++), p.id)) {
                          log(`${p.name} was intimidated and missed.`);
                          notify("Intimidated! Miss.", 'warning');
                          return newState;
@@ -936,7 +981,8 @@ export const gameReducer = (state: GS, action: GA): GS => {
             }
 
             // Agile Reaction Trigger (Opponent can pay to evade)
-            const canTargetEvade = target.formation.some(c => c.defId === CID.SmallSize || c.defId === CID.Agile) && target.stamina >= 1 && !target.statuses.some(s => s.type === 'Grappled' || s.type === 'CannotEvade' || s.type === 'Stuck');
+            // MODIFIED: Removed SmallSize from check. Only 'Agile' card triggers this reaction now.
+            const canTargetEvade = target.formation.some(c => c.defId === CID.Agile) && target.stamina >= 1 && !target.statuses.some(s => s.type === 'Grappled' || s.type === 'CannotEvade' || s.type === 'Stuck');
             
             // If attacking with Ambush, flip for evade prevention
             let ambushPrevent = false;
@@ -1062,6 +1108,11 @@ export const gameReducer = (state: GS, action: GA): GS => {
                      log(`${p.name} copied/stole ${CARDS[stolen.defId].name}!`);
                      notify("Card Stolen!", 'success');
                  }
+            }
+            if (def.id === CID.StandOnHindLegs) {
+                addStatus(p, { type: 'Intimidating', duration: 1 });
+                log(`${p.name} stands on hind legs (Intimidating).`);
+                notify("Intimidating Stance!", 'success');
             }
         }
 

@@ -113,7 +113,7 @@ export interface CardInstance {
 }
 
 export interface StatusEffect {
-  type: 'Poisoned' | 'Stuck' | 'Grappled' | 'Confused' | 'Hidden' | 'Camouflaged' | 'Flying' | 'CannotAttack' | 'CannotEvade' | 'Accurate' | 'DamageBuff' | 'StaminaDebt' | 'Evading' | 'Chasing' | 'Climbing' | 'Leeched';
+  type: 'Poisoned' | 'Stuck' | 'Grappled' | 'Confused' | 'Hidden' | 'Camouflaged' | 'Flying' | 'CannotAttack' | 'CannotEvade' | 'Accurate' | 'DamageBuff' | 'StaminaDebt' | 'Evading' | 'Chasing' | 'Climbing' | 'Leeched' | 'Intimidating';
   duration?: number; // Turns remaining
   value?: number;
   sourceId?: string; // ID of the player who applied the status (for Leech healing)
