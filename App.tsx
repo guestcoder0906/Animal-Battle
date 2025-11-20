@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Game } from './components/Game';
 import { gameReducer, createPlayer } from './services/gameEngine';
@@ -103,7 +102,7 @@ const App: React.FC = () => {
     <div className="min-h-screen flex items-center justify-center bg-stone-900 text-white p-4">
       {status === 'menu' && (
         <div className="max-w-md w-full p-8 bg-stone-800 rounded-lg shadow-2xl border border-stone-700">
-          <h1 className="text-4xl font-bold text-center mb-8 text-amber-500">Animal Battle</h1>
+          <h1 className="text-4xl font-bold text-center mb-8 text-amber-500">Creature Clash</h1>
           
           <input 
             type="text" 

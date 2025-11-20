@@ -1,5 +1,5 @@
 {
-  "name": "Animal Battle Arena",
-  "description": "A real-time multiplayer card battler where players build creature decks and fight in various habitats.",
+  "name": "Creature Clash",
+  "description": "A real-time card battler where players build creature decks and fight in various habitats.",
   "requestFramePermissions": []
 }

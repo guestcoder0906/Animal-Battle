@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { GameState, PlayerState, CardType, GameAction, CardId, Habitat, CoinFlipEvent, GameNotification } from '../types';
 import { CARDS } from '../constants';
@@ -359,7 +358,7 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
       <div className={`fixed inset-0 z-[80] bg-black/95 p-4 md:static md:bg-stone-950 md:w-80 md:border-r md:border-stone-800 md:flex md:flex-col ${showLog ? 'flex flex-col' : 'hidden'}`}>
         <div className="flex justify-between items-center mb-4 md:hidden"><h2 className="text-amber-500 font-bold">Game Log</h2><button onClick={() => setShowLog(false)} className="text-white p-2">✕</button></div>
         <div className="hidden md:block mb-6 border-b border-stone-800 pb-4">
-           <h1 className="text-2xl font-black text-amber-500 tracking-tight uppercase">Animal Battle</h1>
+           <h1 className="text-2xl font-black text-amber-500 tracking-tight uppercase">Creature Clash</h1>
            <div className="text-xs text-stone-500 mt-2 space-y-2">
              <div className="flex justify-between items-center bg-stone-900 p-2 rounded"><span>Habitat</span> <span className="text-stone-200 font-bold uppercase text-lg">{habitatStyle.emoji} {state.habitat}</span></div>
              <div className="flex justify-between items-center bg-stone-900 p-2 rounded"><span>Turn</span> <span className="text-white font-mono">{state.turn}</span></div>
