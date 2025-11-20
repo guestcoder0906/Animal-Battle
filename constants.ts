@@ -257,9 +257,9 @@ export const CARDS: Record<string, CardDef> = {
     description: "Free Action. Escape Grappled/Stuck. +1 Damage this turn."
   },
   [CardId.TerritorialDisplay]: {
-    id: CardId.TerritorialDisplay, name: "Territorial Display", type: CardType.Ability, abilityStatus: AbilityStatus.None,
-    creatureTypes: 'All', habitats: 'All', staminaCost: 1,
-    description: "Flip Coin: Heads = Opponent discards hand."
+    id: CardId.TerritorialDisplay, name: "Territorial Display", type: CardType.Ability, abilityStatus: AbilityStatus.ConsumableImpact,
+    creatureTypes: 'All', habitats: 'All', staminaCost: 2,
+    description: "Flip Coin: Heads = Opponent discards hand. Consumable."
   },
   [CardId.Mimicry]: {
     id: CardId.Mimicry, name: "Mimicry", type: CardType.Ability, abilityStatus: AbilityStatus.None,
