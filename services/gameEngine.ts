@@ -1,6 +1,4 @@
 
-
-
 import { CARDS, generateDeck, getRandomElement as randomElem } from '../constants';
 import { GameState as GS, PlayerState as PS, CardInstance as CI, CreatureType as CT, Habitat as H, CardType as CType, AbilityStatus as AS, CardDef, GameAction as GA, CardId as CID, GameNotification } from '../types';
 
@@ -62,7 +60,8 @@ export const createPlayer = (id: string, name: string): PS => {
     creatureType: cType, size,
     hand, deck: remainingDeck, discard: [], formation,
     statuses: [],
-    cardsPlayedThisTurn: 0, hasActedThisTurn: false
+    cardsPlayedThisTurn: 0, hasActedThisTurn: false,
+    guaranteedHeads: false
   };
 };
 
@@ -81,8 +80,18 @@ export const gameReducer = (state: GS, action: GA): GS => {
     newState.log.unshift(`[T${newState.turn}] ${msg}`);
   };
 
-  const performCoinFlip = (reason: string, rngVal: number): boolean => {
-     const isHeads = rngVal > 0.5;
+  const performCoinFlip = (reason: string, rngVal: number, flipperId?: string): boolean => {
+     let isHeads = rngVal > 0.5;
+     
+     if (flipperId) {
+         const flipper = newState.players[flipperId];
+         if (flipper && flipper.guaranteedHeads) {
+             isHeads = true;
+             flipper.guaranteedHeads = false;
+             log(`${flipper.name} uses guaranteed HEADS for ${reason}!`);
+         }
+     }
+
      newState.activeCoinFlip = {
         id: Math.random().toString(36),
         result: isHeads ? 'Heads' : 'Tails',
@@ -127,6 +136,9 @@ export const gameReducer = (state: GS, action: GA): GS => {
       const player = newState.players[action.playerId];
       const opponentId = Object.keys(newState.players).find(id => id !== action.playerId)!;
       
+      // Clear temporary flags for end of turn
+      player.guaranteedHeads = false; 
+      
       newState.currentPlayer = opponentId;
       newState.turn += 1;
       newState.phase = 'start';
@@ -139,7 +151,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
       
       // Confused Check (Start of Turn)
       if (nextPlayer.statuses.some(s => s.type === 'Confused')) {
-           const flip = performCoinFlip('Confusion Check', getRNG(action.rng, rngIndex++));
+           const flip = performCoinFlip('Confusion Check', getRNG(action.rng, rngIndex++), nextPlayer.id);
            if (flip) {
               notify(`${nextPlayer.name} snapped out of confusion!`, 'success');
               nextPlayer.statuses = nextPlayer.statuses.filter(s => s.type !== 'Confused');
@@ -313,7 +325,8 @@ export const gameReducer = (state: GS, action: GA): GS => {
          return newState;
       }
 
-      if (p.cardsPlayedThisTurn >= 1) {
+      // Focus bypasses the 1-card limit
+      if (p.cardsPlayedThisTurn >= 1 && def.id !== CID.Focus) {
         notify("Can only play 1 card per turn!", 'error');
         return state;
       }
@@ -332,11 +345,24 @@ export const gameReducer = (state: GS, action: GA): GS => {
       
       // FOCUS LOGIC
       if (def.id === CID.Focus) {
-          // Focus is played but does not count towards cards played limit.
-          // It is consumed immediately (moves to discard)
+          // Focus is played and consumed.
           p.discard.push(card);
-          log(`${p.name} played Focus! Can play another card.`);
-          notify("Focus! Play another card.", 'success');
+          
+          // Grant effects:
+          // 1. Next flip guaranteed heads
+          p.guaranteedHeads = true;
+          
+          // 2. Allows playing another card.
+          // Since we just "played" Focus (which might have bypassed the limit),
+          // we want to ensure the counter allows exactly one more card relative to before Focus.
+          // If count was 0, we play Focus -> count 0.
+          // If count was 1, we play Focus -> count 0.
+          if (p.cardsPlayedThisTurn > 0) {
+              p.cardsPlayedThisTurn--;
+          }
+          
+          log(`${p.name} played Focus! Guaranteed Heads & Extra Card.`);
+          notify("Focus! Next flip Heads + Play Card.", 'success');
           return newState;
       }
 
@@ -355,7 +381,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
         if (!p.statuses.some(s => s.type === 'Grappled')) return state;
         if (p.hasActedThisTurn) return state;
 
-        const flip = performCoinFlip('Grapple Escape', getRNG(action.rng, 0));
+        const flip = performCoinFlip('Grapple Escape', getRNG(action.rng, 0), p.id);
         p.hasActedThisTurn = true;
         if (flip) {
             p.statuses = p.statuses.filter(s => s.type !== 'Grappled');
@@ -376,7 +402,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
        }
        if (newState.habitat !== H.Forest) return state;
 
-       const isHeads = performCoinFlip('Forest Hide', getRNG(action.rng, 0));
+       const isHeads = performCoinFlip('Forest Hide', getRNG(action.rng, 0), p.id);
        p.hasUsedForestHide = true;
        
        if (isHeads) {
@@ -438,7 +464,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
       // Grapple Check for Attacks
       if (isGrappled && action.actionType === 'ATTACK') {
           notify("You are Grappled! Must flip heads to attack.", 'warning');
-          const grappleFlip = performCoinFlip('Grappled Attack Check', getRNG(action.rng, 0));
+          const grappleFlip = performCoinFlip('Grappled Attack Check', getRNG(action.rng, 0), p.id);
           if (!grappleFlip) {
               p.stamina -= def.staminaCost; 
               p.hasActedThisTurn = true;
@@ -461,7 +487,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
       if (action.actionType === 'ATTACK') {
          // Handle Physical Utilities that don't deal standard damage
          if (def.id === CID.Camouflage) {
-            if (performCoinFlip('Camouflage', getRNG(action.rng, rngIndex++))) {
+            if (performCoinFlip('Camouflage', getRNG(action.rng, rngIndex++), p.id)) {
                p.statuses.push({ type: 'Camouflaged' });
                notify("Camouflaged!", 'success');
             } else {
@@ -478,7 +504,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
          }
 
          if (def.id === CID.AmbushAttack) {
-             if (performCoinFlip('Ambush Attack Setup', getRNG(action.rng, rngIndex++))) {
+             if (performCoinFlip('Ambush Attack Setup', getRNG(action.rng, rngIndex++), p.id)) {
                  target.statuses.push({ type: 'CannotEvade', duration: 2 }); // Lasts until they are attacked?
                  notify("Ambush set! Opponent cannot evade.", 'success');
              } else {
@@ -514,7 +540,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
              const hasDetection = p.formation.some(c => c.defId === CID.KeenEyesight || c.defId === CID.Whiskers || c.defId === CID.EnhancedSmell); 
              if (!hasDetection) {
                 if (target.statuses.some(s => s.type === 'Camouflaged')) {
-                   const flip = performCoinFlip('Attack Camouflaged', getRNG(action.rng, rngIndex++));
+                   const flip = performCoinFlip('Attack Camouflaged', getRNG(action.rng, rngIndex++), p.id);
                    if (!flip) {
                       log(`${p.name} missed Camouflaged target.`);
                       notify("Missed (Camouflaged)!", 'warning');
@@ -529,7 +555,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
                 log(`${p.name} spotted Hidden target!`);
              }
          } else if (target.formation.some(c => c.defId === CID.CamouflageWater) && newState.habitat === H.Water) {
-             const flip = performCoinFlip('Water Camouflage', getRNG(action.rng, rngIndex++));
+             const flip = performCoinFlip('Water Camouflage', getRNG(action.rng, rngIndex++), p.id);
              if (!flip) {
                  log(`${p.name} missed (Water Ambush).`);
                  hit = false;
@@ -537,7 +563,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
          }
 
          if (hit && target.statuses.some(s => s.type === 'Flying')) {
-            const flip = performCoinFlip('Hit Flying Target', getRNG(action.rng, rngIndex++));
+            const flip = performCoinFlip('Hit Flying Target', getRNG(action.rng, rngIndex++), p.id);
             if (!flip) {
                log(`${p.name} missed Flying target.`);
                hit = false;
@@ -550,7 +576,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
              if (!cannotEvade) {
                 const evades = target.formation.filter(c => c.defId === CID.LargeHindLegs || c.defId === CID.SwimFast);
                 if (evades.length > 0 && !target.statuses.some(s => s.type === 'Grappled')) { 
-                    const evadeFlip = performCoinFlip('Evasion Attempt', getRNG(action.rng, rngIndex++));
+                    const evadeFlip = performCoinFlip('Evasion Attempt', getRNG(action.rng, rngIndex++), target.id);
                     if (evadeFlip) {
                         log(`${target.name} evaded the attack!`);
                         hit = false;
@@ -568,9 +594,9 @@ export const gameReducer = (state: GS, action: GA): GS => {
             let defense = 0;
             if (target.formation.some(c => c.defId === CID.ArmoredScales)) defense += 1;
             if (target.formation.some(c => c.defId === CID.ThickFur)) defense += 1;
-            if (target.formation.some(c => c.defId === CID.Fur) && performCoinFlip('Fur Defense', getRNG(action.rng, rngIndex++))) defense += 1;
+            if (target.formation.some(c => c.defId === CID.Fur) && performCoinFlip('Fur Defense', getRNG(action.rng, rngIndex++), target.id)) defense += 1;
             if (target.formation.some(c => c.defId === CID.ArmoredExoskeleton)) {
-               if (!performCoinFlip('Exoskeleton', getRNG(action.rng, rngIndex++))) defense += 2;
+               if (!performCoinFlip('Exoskeleton', getRNG(action.rng, rngIndex++), p.id)) defense += 2;
             }
 
             if (def.id === CID.DiveBomb) defense = 0; 
@@ -582,7 +608,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
                   p.hp -= 1;
                   log(`${p.name} took 1 dmg (Spiky Body).`);
                } else {
-                  if (performCoinFlip('Spiky Body (Agile)', getRNG(action.rng, rngIndex++))) {
+                  if (performCoinFlip('Spiky Body (Agile)', getRNG(action.rng, rngIndex++), p.id)) {
                       p.hp -= 1;
                   } else {
                       damage += 1;
@@ -606,16 +632,16 @@ export const gameReducer = (state: GS, action: GA): GS => {
             notify(`Dealt ${finalDmg} damage!`, 'success');
 
             // On Hit Effects
-            if (def.id === CID.VenomousFangs || (def.id === CID.PoisonSkin && performCoinFlip('Poison Skin', getRNG(action.rng, rngIndex++)))) {
+            if (def.id === CID.VenomousFangs || (def.id === CID.PoisonSkin && performCoinFlip('Poison Skin', getRNG(action.rng, rngIndex++), p.id))) {
                target.statuses.push({ type: 'Poisoned' });
             }
             
-            if (def.id === CID.GraspingTalons && performCoinFlip('Grapple Chance', getRNG(action.rng, rngIndex++))) {
+            if (def.id === CID.GraspingTalons && performCoinFlip('Grapple Chance', getRNG(action.rng, rngIndex++), p.id)) {
                 target.statuses.push({ type: 'Grappled' });
             }
             if (def.id === CID.StrongJaw) target.statuses.push({ type: 'Grappled' });
             
-            if (def.id === CID.DeathRoll && performCoinFlip('Death Roll', getRNG(action.rng, rngIndex++))) {
+            if (def.id === CID.DeathRoll && performCoinFlip('Death Roll', getRNG(action.rng, rngIndex++), p.id)) {
                 target.statuses.push({ type: 'Grappled' });
             }
          }
@@ -637,21 +663,21 @@ export const gameReducer = (state: GS, action: GA): GS => {
             p.hasActedThisTurn = false; 
          }
          else if (def.id === CID.Confuse) {
-            if (performCoinFlip('Confuse', getRNG(action.rng, rngIndex++))) {
+            if (performCoinFlip('Confuse', getRNG(action.rng, rngIndex++), p.id)) {
                if (!target.formation.some(c => c.defId === CID.Intelligence)) {
                   target.statuses.push({ type: 'Confused' });
                } else notify("Blocked by Intelligence", 'warning');
             }
          }
          else if (def.id === CID.ToxicSpit) {
-             if (performCoinFlip('Toxic Spit', getRNG(action.rng, rngIndex++))) {
+             if (performCoinFlip('Toxic Spit', getRNG(action.rng, rngIndex++), p.id)) {
                  target.statuses.push({ type: 'Poisoned' });
              } else {
                  target.statuses.push({ type: 'Stuck', duration: 1 }); 
              }
          }
          else if (def.id === CID.StickyTongue) {
-             if (performCoinFlip('Sticky Tongue', getRNG(action.rng, rngIndex++))) {
+             if (performCoinFlip('Sticky Tongue', getRNG(action.rng, rngIndex++), p.id)) {
                  target.statuses.push({ type: 'Stuck' });
                  if (target.size === 'Small') target.hp -= 1;
              }
@@ -662,13 +688,13 @@ export const gameReducer = (state: GS, action: GA): GS => {
              notify("Gained +1 Stamina (Debt next turn)", 'success');
          }
          else if (def.id === CID.TerritorialDisplay) {
-             if (performCoinFlip('Territorial Display', getRNG(action.rng, rngIndex++))) {
+             if (performCoinFlip('Territorial Display', getRNG(action.rng, rngIndex++), p.id)) {
                  target.hand = [];
                  notify("Opponent discarded hand!", 'success');
              }
          }
          else if (def.id === CID.ExhaustingRoar) {
-             if (performCoinFlip('Exhausting Roar', getRNG(action.rng, rngIndex++))) {
+             if (performCoinFlip('Exhausting Roar', getRNG(action.rng, rngIndex++), p.id)) {
                  target.stamina = Math.max(0, target.stamina - 1);
              }
          }

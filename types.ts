@@ -1,5 +1,4 @@
 
-
 export enum CreatureType {
   Mammal = 'Mammal',
   Reptile = 'Reptile',
@@ -133,6 +132,7 @@ export interface PlayerState {
   cardsPlayedThisTurn: number; // Max 1
   hasActedThisTurn: boolean; // Max 1
   hasUsedForestHide?: boolean; // Once per game
+  guaranteedHeads?: boolean;
 }
 
 export interface CoinFlipEvent {

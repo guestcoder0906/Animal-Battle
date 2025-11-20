@@ -1,3 +1,4 @@
+
 import { CardDef, CardId, CardType, AbilityStatus, CreatureType, Habitat } from './types';
 
 export const CARDS: Record<string, CardDef> = {
@@ -231,7 +232,7 @@ export const CARDS: Record<string, CardDef> = {
   [CardId.Focus]: {
     id: CardId.Focus, name: "Focus", type: CardType.Ability, abilityStatus: AbilityStatus.ConsumableImpact,
     creatureTypes: 'All', habitats: 'All', staminaCost: 0,
-    description: "Play an additional card this turn."
+    description: "Play immediately even if you played a card. Next coin flip this turn is guaranteed Heads. Allows playing another card."
   },
   [CardId.AdrenalineRush]: {
     id: CardId.AdrenalineRush, name: "Adrenaline Rush", type: CardType.Ability, abilityStatus: AbilityStatus.ConsumableImpact,
