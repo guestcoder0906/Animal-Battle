@@ -231,13 +231,13 @@ export const CARDS: Record<string, CardDef> = {
   },
   [CardId.Focus]: {
     id: CardId.Focus, name: "Focus", type: CardType.Ability, abilityStatus: AbilityStatus.ConsumableImpact,
-    creatureTypes: 'All', habitats: 'All', staminaCost: 0,
-    description: "Next coin flip is guaranteed Heads. Draw another card."
+    creatureTypes: 'All', habitats: 'All', staminaCost: 1,
+    description: "Free Action. Escape Grappled/Stuck. +1 Damage this turn. Next flip guaranteed Heads."
   },
   [CardId.AdrenalineRush]: {
     id: CardId.AdrenalineRush, name: "Adrenaline Rush", type: CardType.Ability, abilityStatus: AbilityStatus.None,
     creatureTypes: 'All', habitats: 'All', staminaCost: 0,
-    description: "Gain +1 Stamina now. Lose 1 Stamina next turn."
+    description: "Free Action. Gain +1 Stamina now. Lose 1 Stamina next turn."
   },
   [CardId.StickyTongue]: {
     id: CardId.StickyTongue, name: "Sticky Tongue", type: CardType.Ability, abilityStatus: AbilityStatus.None,
@@ -251,8 +251,8 @@ export const CARDS: Record<string, CardDef> = {
   },
   [CardId.Rage]: {
     id: CardId.Rage, name: "Rage", type: CardType.Ability, abilityStatus: AbilityStatus.None,
-    creatureTypes: [CreatureType.Mammal], habitats: 'All', staminaCost: 1,
-    description: "Attack again this turn."
+    creatureTypes: [CreatureType.Mammal], habitats: 'All', staminaCost: 2,
+    description: "Free Action. Escape Grappled/Stuck. +1 Damage this turn."
   },
   [CardId.TerritorialDisplay]: {
     id: CardId.TerritorialDisplay, name: "Territorial Display", type: CardType.Ability, abilityStatus: AbilityStatus.None,

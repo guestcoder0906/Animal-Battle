@@ -1,5 +1,3 @@
-
-
 import { GameState, GameAction, CardType, CardId, AbilityStatus, CardInstance } from '../types';
 import { CARDS } from '../constants';
 

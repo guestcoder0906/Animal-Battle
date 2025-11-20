@@ -138,6 +138,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
       
       // Clear temporary flags for end of turn
       player.guaranteedHeads = false; 
+      player.statuses = player.statuses.filter(s => s.type !== 'DamageBuff'); // Remove 1-turn buffs
       
       newState.currentPlayer = opponentId;
       newState.turn += 1;
@@ -289,11 +290,6 @@ export const gameReducer = (state: GS, action: GA): GS => {
       const card = p.hand[cardIdx];
       const def = CARDS[card.defId];
 
-      if (def.creatureTypes !== 'All' && !def.creatureTypes.includes(p.creatureType)) {
-         notify(`Cannot play ${def.name} (Wrong Type)`, 'error');
-         return state;
-      }
-
       if (def.isUpgrade) {
          if (!action.targetInstanceId) {
              notify("Select a valid target card in formation to upgrade.", 'error');
@@ -325,8 +321,8 @@ export const gameReducer = (state: GS, action: GA): GS => {
          return newState;
       }
 
-      // Focus bypasses the 1-card limit
-      if (p.cardsPlayedThisTurn >= 1 && def.id !== CID.Focus) {
+      // Limit cards played (unless exceptions exist, currently none standard except passives which auto-play)
+      if (p.cardsPlayedThisTurn >= 1) {
         notify("Can only play 1 card per turn!", 'error');
         return state;
       }
@@ -342,28 +338,6 @@ export const gameReducer = (state: GS, action: GA): GS => {
       }
 
       p.hand.splice(cardIdx, 1);
-      
-      // FOCUS LOGIC
-      if (def.id === CID.Focus) {
-          // Focus is played and consumed.
-          p.discard.push(card);
-          
-          // Grant effects:
-          // 1. Next flip guaranteed heads
-          p.guaranteedHeads = true;
-          
-          // 2. Allows playing another card.
-          // Since we just "played" Focus (which might have bypassed the limit),
-          // we want to ensure the counter allows exactly one more card relative to before Focus.
-          if (p.cardsPlayedThisTurn > 0) {
-              p.cardsPlayedThisTurn--;
-          }
-          
-          log(`${p.name} played Focus! Guaranteed Heads & Extra Card.`);
-          notify("Focus! Next flip Heads + Play Card.", 'success');
-          return newState;
-      }
-
       p.formation.push(card);
       p.cardsPlayedThisTurn++;
       
@@ -445,13 +419,15 @@ export const gameReducer = (state: GS, action: GA): GS => {
          return state;
       }
       
+      // Stuck prevents attacks, but some abilities might free you (Rage, Focus)
       if (isStuck && action.actionType === 'ATTACK') {
          notify("You are Stuck and cannot attack!", 'error');
          return state;
       }
 
       // Exceptions for things that don't count as main action
-      const isFreeAction = def.id === CID.EnhancedSmell || def.id === CID.SwimFast || (def.id === CID.Agile && action.actionType === 'ABILITY');
+      const isFreeAction = def.id === CID.EnhancedSmell || def.id === CID.SwimFast || 
+                           ((def.id === CID.Agile || def.id === CID.Focus || def.id === CID.Rage || def.id === CID.AdrenalineRush) && action.actionType === 'ABILITY');
 
       if (p.hasActedThisTurn && !isFreeAction) {
          notify("Already acted this turn!", 'error');
@@ -478,7 +454,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
       }
 
       p.stamina -= def.staminaCost;
-      if (def.id !== CID.Rage && !isFreeAction) {
+      if (!isFreeAction) {
         p.hasActedThisTurn = true;
       }
 
@@ -542,10 +518,16 @@ export const gameReducer = (state: GS, action: GA): GS => {
          else if (def.id === CID.StrongJaw) damage = 3; 
          else if (def.id === CID.LargeHindLegs && (p.size === 'Medium' || p.size === 'Big')) damage = 2;
 
+         // Modifiers
          if (p.formation.some(c => c.defId === CID.StrongBuild)) damage += 1;
          if (newState.habitat === H.Water && p.formation.some(c => c.defId === CID.SwimsWell)) damage += 2;
          if (newState.habitat === H.Water && p.formation.some(c => c.defId === CID.SwimFast)) damage += 2; // Swim Fast Bonus
          if (newState.habitat === H.Water && p.creatureType === CT.Amphibian) damage += 1;
+         
+         // Damage Buff Status
+         if (p.statuses.some(s => s.type === 'DamageBuff')) {
+            damage += 1;
+         }
 
          // HIT LOGIC
          const isTargetHidden = target.statuses.some(s => s.type === 'Hidden') || target.statuses.some(s => s.type === 'Camouflaged');
@@ -633,7 +615,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
 
             // Spiky Body
             if (target.formation.some(c => c.defId === CID.SpikyBody)) {
-               const attackerAgile = p.size === 'Small';
+               const attackerAgile = p.formation.some(c => c.defId === CID.SmallSize || c.defId === CID.Agile);
                if (!attackerAgile) {
                   p.hp -= 1;
                   log(`${p.name} took 1 dmg (Spiky Body).`);
@@ -734,7 +716,17 @@ export const gameReducer = (state: GS, action: GA): GS => {
              p.statuses = [];
          }
          else if (def.id === CID.Rage) {
-            p.hasActedThisTurn = false;
+            // NEW RAGE LOGIC
+            p.statuses = p.statuses.filter(s => s.type !== 'Grappled' && s.type !== 'Stuck');
+            p.statuses.push({ type: 'DamageBuff', duration: 1 });
+            notify("Rage! +1 Damage & Free Action.", 'success');
+         }
+         else if (def.id === CID.Focus) {
+            // NEW FOCUS LOGIC
+            p.statuses = p.statuses.filter(s => s.type !== 'Grappled' && s.type !== 'Stuck');
+            p.statuses.push({ type: 'DamageBuff', duration: 1 });
+            p.guaranteedHeads = true;
+            notify("Focus! +1 Damage & Guaranteed Heads.", 'success');
          }
          else if (def.id === CID.Copycat) {
             if (action.targetHandCardId) {
@@ -751,7 +743,6 @@ export const gameReducer = (state: GS, action: GA): GS => {
          else if (def.id === CID.Agile) {
              p.statuses.push({ type: 'Accurate', duration: 1 });
              notify("Agile! Attacks won't miss.", 'success');
-             p.hasActedThisTurn = false; // Free action
          }
          
          // Consumable Removal

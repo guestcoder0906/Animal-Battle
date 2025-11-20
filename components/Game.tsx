@@ -10,6 +10,20 @@ interface GameProps {
   dispatch: (action: GameAction) => void;
 }
 
+const ACTIVE_PHYSICALS = [
+  CardId.ClawAttack, CardId.Bite, CardId.StrongJaw, CardId.LargeHindLegs, 
+  CardId.BigClaws, CardId.StrongTail, CardId.DeathRoll, CardId.SwimFast, 
+  CardId.AmbushAttack, CardId.GraspingTalons, CardId.DiveBomb, CardId.PiercingBeak, 
+  CardId.VenomousFangs, CardId.CrushingWeight, CardId.Camouflage
+];
+
+const ACTIVE_ABILITIES = [
+  CardId.Confuse, CardId.Hibernate, CardId.ToxicSpit, CardId.Regeneration, 
+  CardId.Focus, CardId.AdrenalineRush, CardId.StickyTongue, CardId.ShedSkin, 
+  CardId.Rage, CardId.TerritorialDisplay, CardId.ExhaustingRoar, CardId.EnhancedSmell, 
+  CardId.Copycat, CardId.Agile
+];
+
 const NotificationToast: React.FC<{ note: GameNotification }> = ({ note }) => {
   const colors = {
     info: 'bg-blue-600/90 border-blue-400',
@@ -293,7 +307,14 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
       </div>
       <div className="flex gap-1 overflow-hidden max-w-[100px] md:max-w-[150px] flex-wrap justify-end">
         {p.statuses.map((s, i) => (
-          <span key={i} className={`px-1.5 py-0.5 rounded text-[9px] font-bold border shadow-sm truncate max-w-full ${s.type === 'Poisoned' ? 'bg-green-900 border-green-500 text-green-100' : s.type === 'Grappled' ? 'bg-orange-900 border-orange-500 text-orange-100' : s.type === 'Camouflaged' ? 'bg-cyan-900 border-cyan-500 text-cyan-100' : s.type === 'Hidden' ? 'bg-stone-700 border-stone-500 text-stone-300' : s.type === 'Accurate' ? 'bg-yellow-900 border-yellow-500 text-yellow-100' : 'bg-purple-900 border-purple-500 text-purple-100'}`}>{s.type}</span>
+          <span key={i} className={`px-1.5 py-0.5 rounded text-[9px] font-bold border shadow-sm truncate max-w-full ${
+             s.type === 'Poisoned' ? 'bg-green-900 border-green-500 text-green-100' : 
+             s.type === 'Grappled' ? 'bg-orange-900 border-orange-500 text-orange-100' : 
+             s.type === 'Camouflaged' ? 'bg-cyan-900 border-cyan-500 text-cyan-100' : 
+             s.type === 'Hidden' ? 'bg-stone-700 border-stone-500 text-stone-300' : 
+             s.type === 'Accurate' ? 'bg-yellow-900 border-yellow-500 text-yellow-100' : 
+             s.type === 'DamageBuff' ? 'bg-red-700 border-red-400 text-white' :
+             'bg-purple-900 border-purple-500 text-purple-100'}`}>{s.type === 'DamageBuff' ? '+1 DMG' : s.type}</span>
         ))}
       </div>
     </div>
@@ -440,17 +461,17 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
                </button>
                
                <button 
-                 disabled={!selectedCardId || !isSelectedInFormation || selectedDef?.type !== CardType.Physical}
+                 disabled={!selectedCardId || !isSelectedInFormation || selectedDef?.type !== CardType.Physical || !ACTIVE_PHYSICALS.includes(selectedDef?.id as CardId)}
                  onClick={() => handleAction('ATTACK')}
-                 className={`rounded-lg py-2 md:py-3 font-black text-[10px] md:text-sm transition-all active:scale-95 disabled:opacity-30 disabled:scale-100 ${isSelectedInFormation && selectedDef?.type === CardType.Physical ? 'bg-red-600 text-white hover:bg-red-500 shadow-[0_0_15px_rgba(220,38,38,0.4)]' : 'bg-stone-800 text-stone-500'}`}
+                 className={`rounded-lg py-2 md:py-3 font-black text-[10px] md:text-sm transition-all active:scale-95 disabled:opacity-30 disabled:scale-100 ${isSelectedInFormation && selectedDef?.type === CardType.Physical && ACTIVE_PHYSICALS.includes(selectedDef?.id as CardId) ? 'bg-red-600 text-white hover:bg-red-500 shadow-[0_0_15px_rgba(220,38,38,0.4)]' : 'bg-stone-800 text-stone-500'}`}
                >
                  ATTACK
                </button>
 
                <button 
-                 disabled={!selectedCardId || !isSelectedInFormation || (selectedDef?.type !== CardType.Ability && selectedDef?.id !== CardId.Amphibious)}
+                 disabled={!selectedCardId || !isSelectedInFormation || selectedDef?.type !== CardType.Ability || !ACTIVE_ABILITIES.includes(selectedDef?.id as CardId)}
                  onClick={() => handleAction('ABILITY')}
-                 className={`rounded-lg py-2 md:py-3 font-black text-[10px] md:text-sm transition-all active:scale-95 disabled:opacity-30 disabled:scale-100 ${isSelectedInFormation && (selectedDef?.type === CardType.Ability || selectedDef?.id === CardId.Amphibious) ? 'bg-purple-600 text-white hover:bg-purple-500 shadow-[0_0_15px_rgba(147,51,234,0.4)]' : 'bg-stone-800 text-stone-500'}`}
+                 className={`rounded-lg py-2 md:py-3 font-black text-[10px] md:text-sm transition-all active:scale-95 disabled:opacity-30 disabled:scale-100 ${isSelectedInFormation && selectedDef?.type === CardType.Ability && ACTIVE_ABILITIES.includes(selectedDef?.id as CardId) ? 'bg-purple-600 text-white hover:bg-purple-500 shadow-[0_0_15px_rgba(147,51,234,0.4)]' : 'bg-stone-800 text-stone-500'}`}
                >
                  ABILITY
                </button>
@@ -477,3 +498,4 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
       </div>
     </div>
   );
+}
