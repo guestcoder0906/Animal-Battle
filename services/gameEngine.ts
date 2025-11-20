@@ -1,5 +1,3 @@
-
-
 import { CARDS, generateDeck, getRandomElement as randomElem } from '../constants';
 import { GameState as GS, PlayerState as PS, CardInstance as CI, CreatureType as CT, Habitat as H, CardType as CType, AbilityStatus as AS, CardDef, GameAction as GA, CardId as CID, GameNotification } from '../types';
 
@@ -647,9 +645,13 @@ export const gameReducer = (state: GS, action: GA): GS => {
              if (isChasing) {
                  log(`${p.name} chases through Water Camouflage!`);
              } else {
-                 log(`${p.name} missed (Water Camouflage).`);
-                 notify("Missed (Water Camo)!", 'warning');
-                 hit = false;
+                 // Attack Misses if Attacker flips Tails
+                 const flip = performCoinFlip('Attack Water Camo', getRNG(action.rng, rngIndex++), p.id);
+                 if (!flip) {
+                     log(`${p.name} missed (Water Camouflage).`);
+                     notify("Missed (Water Camo)!", 'warning');
+                     hit = false;
+                 }
              }
          } else if (isTargetEvading && !isAccurate) {
              log(`${p.name} missed (Opponent Evading).`);
@@ -718,6 +720,14 @@ export const gameReducer = (state: GS, action: GA): GS => {
             } else {
                notify("Roar failed.", 'warning');
             }
+         }
+         else if (def.id === CID.Freeze) {
+             if (performCoinFlip('Freeze (Hide)', getRNG(action.rng, rngIndex++), p.id)) {
+                 p.statuses.push({ type: 'Hidden', duration: 1 });
+                 notify("Frozen & Hidden!", 'success');
+             } else {
+                 notify("Failed to hide.", 'warning');
+             }
          }
          else if (def.id === CID.Regeneration) {
             p.hp = Math.min(p.maxHp, p.hp + 4);

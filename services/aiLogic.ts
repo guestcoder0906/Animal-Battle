@@ -1,5 +1,3 @@
-
-
 import { GameState, GameAction, CardType, CardId, AbilityStatus, CardInstance, PendingReaction } from '../types';
 import { CARDS } from '../constants';
 
@@ -53,58 +51,85 @@ export const computeAiActions = (state: GameState, aiId: string): GameAction[] =
 
   // --- 1. PLAY CARD PHASE ---
   if (cardsPlayed === 0) {
-    // Try to find an upgrade first
-    const upgrades = ai.hand.filter(c => CARDS[c.defId].isUpgrade);
-    let playedUpgrade = false;
     
-    for (const upg of upgrades) {
-      const def = CARDS[upg.defId];
-      if (currentStamina >= def.staminaCost && def.upgradeTarget) {
-        const target = ai.formation.find(c => def.upgradeTarget!.includes(c.defId));
-        if (target) {
-          actions.push({
-            type: 'PLAY_CARD',
-            playerId: aiId,
-            cardInstanceId: upg.instanceId,
-            targetInstanceId: target.instanceId
-          });
-          currentStamina -= def.staminaCost;
-          cardsPlayed++; 
-          playedUpgrade = true;
-          break;
-        }
-      }
-    }
+    // Check for Evolve Logic
+    const evolveCardIndex = ai.hand.findIndex(c => CARDS[c.defId].id === CardId.Evolve);
+    const canEvolve = evolveCardIndex !== -1 && currentStamina >= 2 && ai.formation.length > 0 && ai.hand.length > 1;
 
-    // If no upgrade, play a normal card
-    if (!playedUpgrade) {
-      const validCards = ai.hand.filter(c => {
-        const def = CARDS[c.defId];
-        const typeMatch = def.creatureTypes === 'All' || def.creatureTypes.includes(ai.creatureType);
-        return typeMatch && !def.isUpgrade;
-      });
+    if (canEvolve) {
+        // Evolve logic: Swap a weak formation card for a strong hand card
+        // Find weakest card in formation (simplified: random or non-upgraded small card)
+        const formationTarget = ai.formation[0]; // Just take the first one for simplicity, or prioritize weak
+        
+        // Find strongest card in hand (not the Evolve card itself)
+        const handTarget = ai.hand.filter((c, idx) => idx !== evolveCardIndex)[0];
 
-      if (validCards.length > 0) {
-        // Heuristic: Play Physical if few physicals, else Ability
-        const physCount = ai.formation.filter(c => CARDS[c.defId].type === CardType.Physical).length;
-        
-        // Prefer adding Physical cards if we have few
-        let chosen = validCards.find(c => CARDS[c.defId].type === CardType.Physical);
-        if (!chosen || physCount >= 2) {
-            // Else take any ability
-            chosen = validCards.find(c => CARDS[c.defId].type === CardType.Ability) || validCards[0];
+        if (formationTarget && handTarget) {
+            actions.push({
+                type: 'PLAY_EVOLVE_CARD',
+                playerId: aiId,
+                evolveInstanceId: ai.hand[evolveCardIndex].instanceId,
+                targetFormationId: formationTarget.instanceId,
+                replacementHandId: handTarget.instanceId
+            });
+            currentStamina -= 2;
+            // No card played instance for normal action, but we did swap cards
         }
+    } else {
+
+        // Try to find an upgrade first
+        const upgrades = ai.hand.filter(c => CARDS[c.defId].isUpgrade);
+        let playedUpgrade = false;
         
-        if (chosen) {
-           actions.push({
-            type: 'PLAY_CARD',
-            playerId: aiId,
-            cardInstanceId: chosen.instanceId
-          });
-          cardPlayedInstance = chosen;
-          // Play card doesn't cost stamina usually unless upgrade
+        for (const upg of upgrades) {
+        const def = CARDS[upg.defId];
+        if (currentStamina >= def.staminaCost && def.upgradeTarget) {
+            const target = ai.formation.find(c => def.upgradeTarget!.includes(c.defId));
+            if (target) {
+            actions.push({
+                type: 'PLAY_CARD',
+                playerId: aiId,
+                cardInstanceId: upg.instanceId,
+                targetInstanceId: target.instanceId
+            });
+            currentStamina -= def.staminaCost;
+            cardsPlayed++; 
+            playedUpgrade = true;
+            break;
+            }
         }
-      }
+        }
+
+        // If no upgrade, play a normal card
+        if (!playedUpgrade) {
+        const validCards = ai.hand.filter(c => {
+            const def = CARDS[c.defId];
+            const typeMatch = def.creatureTypes === 'All' || def.creatureTypes.includes(ai.creatureType);
+            return typeMatch && !def.isUpgrade && def.id !== CardId.Evolve;
+        });
+
+        if (validCards.length > 0) {
+            // Heuristic: Play Physical if few physicals, else Ability
+            const physCount = ai.formation.filter(c => CARDS[c.defId].type === CardType.Physical).length;
+            
+            // Prefer adding Physical cards if we have few
+            let chosen = validCards.find(c => CARDS[c.defId].type === CardType.Physical);
+            if (!chosen || physCount >= 2) {
+                // Else take any ability
+                chosen = validCards.find(c => CARDS[c.defId].type === CardType.Ability) || validCards[0];
+            }
+            
+            if (chosen) {
+            actions.push({
+                type: 'PLAY_CARD',
+                playerId: aiId,
+                cardInstanceId: chosen.instanceId
+            });
+            cardPlayedInstance = chosen;
+            // Play card doesn't cost stamina usually unless upgrade
+            }
+        }
+        }
     }
   }
 
@@ -127,6 +152,16 @@ export const computeAiActions = (state: GameState, aiId: string): GameAction[] =
       const affordableActions = availableActions.filter(c => {
         const def = CARDS[c.defId];
         if (def.staminaCost > currentStamina) return false;
+        
+        // EXCLUSIONS: Strong Build, Sizes, etc are PASSIVE
+        if (def.id === CardId.StrongBuild) return false;
+        if (def.type === CardType.Size) return false;
+        if (def.id === CardId.Amphibious) return false;
+        if (def.id === CardId.CamouflageWater) return false;
+        if (def.id === CardId.PoisonSkin) return false;
+        if (def.id === CardId.BarbedQuills) return false;
+        if (def.id === CardId.ArmoredScales) return false;
+        if (def.id === CardId.ArmoredExoskeleton) return false;
         
         // Can only use cards if they are active or permanent or consumable (once played to formation)
         if (def.type === CardType.Physical || def.type === CardType.Ability) return true;

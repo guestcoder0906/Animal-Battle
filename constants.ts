@@ -1,5 +1,3 @@
-
-
 import { CardDef, CardId, CardType, AbilityStatus, CreatureType, Habitat } from './types';
 
 export const CARDS: Record<string, CardDef> = {
@@ -70,7 +68,8 @@ export const CARDS: Record<string, CardDef> = {
   [CardId.ThickFur]: {
     id: CardId.ThickFur, name: "Thick Fur", type: CardType.Physical, abilityStatus: AbilityStatus.None,
     creatureTypes: [CreatureType.Mammal], habitats: 'All', staminaCost: 0,
-    description: "Reduces 1 damage from all attacks."
+    description: "Upgrade Fur. Reduces 1 damage from all attacks.",
+    isUpgrade: true, upgradeTarget: [CardId.Fur]
   },
   [CardId.StandOnHindLegs]: {
     id: CardId.StandOnHindLegs, name: "Stand on Hind Legs", type: CardType.Physical, abilityStatus: AbilityStatus.None,
@@ -117,7 +116,7 @@ export const CARDS: Record<string, CardDef> = {
   [CardId.CamouflageWater]: {
     id: CardId.CamouflageWater, name: "Camouflage in Water", type: CardType.Physical, abilityStatus: AbilityStatus.None,
     creatureTypes: [CreatureType.Reptile, CreatureType.Amphibian], habitats: [Habitat.Water], staminaCost: 0,
-    description: "Passive: In Water, attacks against you miss automatically unless opponent is Chasing."
+    description: "Passive: In Water, attacker flips coin: Tails = Miss (unless Chasing/Accurate)."
   },
   [CardId.SwimFast]: {
     id: CardId.SwimFast, name: "Swim Fast", type: CardType.Physical, abilityStatus: AbilityStatus.None,
@@ -198,8 +197,8 @@ export const CARDS: Record<string, CardDef> = {
   },
   [CardId.Freeze]: {
     id: CardId.Freeze, name: "Freeze", type: CardType.Ability, abilityStatus: AbilityStatus.None,
-    creatureTypes: 'All', habitats: 'All', staminaCost: 1,
-    description: "Stop opponent's movement."
+    creatureTypes: 'All', habitats: 'All', staminaCost: 0,
+    description: "Flip Coin: Heads = Become Hidden."
   },
   [CardId.Roar]: {
     id: CardId.Roar, name: "Roar", type: CardType.Ability, abilityStatus: AbilityStatus.None,

@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useRef } from 'react';
 import { GameState, PlayerState, CardType, GameAction, CardId, Habitat, CoinFlipEvent, GameNotification, PendingReaction } from '../types';
 import { CARDS } from '../constants';
@@ -22,7 +20,7 @@ const ACTIVE_ABILITIES = [
   CardId.Confuse, CardId.Hibernate, CardId.ToxicSpit, CardId.Regeneration, 
   CardId.Focus, CardId.AdrenalineRush, CardId.StickyTongue, CardId.ShedSkin, 
   CardId.Rage, CardId.TerritorialDisplay, CardId.ExhaustingRoar, CardId.EnhancedSmell, 
-  CardId.Copycat, CardId.Agile
+  CardId.Copycat, CardId.Agile, CardId.Freeze
 ];
 
 const NotificationToast: React.FC<{ note: GameNotification }> = ({ note }) => {
@@ -464,7 +462,7 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
         {/* SCROLLABLE AREA FOR BOARD CONTENT */}
         <div className="flex-1 flex flex-col overflow-y-auto overflow-x-hidden">
             {/* OPPONENT AREA */}
-            <div className="flex flex-col p-2 md:p-3 bg-black/30 border-b border-white/5 min-h-min shrink-0 justify-center transition-colors duration-500 shadow-lg gap-2">
+            <div className="flex-1 flex flex-col p-2 md:p-3 bg-black/30 border-b border-white/5 min-h-min shrink-0 justify-center transition-colors duration-500 shadow-lg gap-2">
                <PlayerStats p={opponent} isOpponent />
                <div className="flex justify-center -space-x-3 md:-space-x-4 my-1 md:my-3 opacity-80">
                  {opponent.hand.map((_, i) => (
