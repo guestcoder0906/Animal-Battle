@@ -90,7 +90,7 @@ export const CARDS: Record<string, CardDef> = {
   [CardId.LargeHindLegs]: {
     id: CardId.LargeHindLegs, name: "Large Hind Legs", type: CardType.Physical, abilityStatus: AbilityStatus.None,
     creatureTypes: [CreatureType.Mammal, CreatureType.Avian, CreatureType.Amphibian], habitats: 'All', staminaCost: 1,
-    description: "Kick: 2 damage (Medium/Big). If Small, use to Evade next attack."
+    description: "Kick: 2 damage (Medium/Big). If Small, automatically Evade next attack."
   },
   [CardId.BigClaws]: {
     id: CardId.BigClaws, name: "Big Claws", type: CardType.Physical, abilityStatus: AbilityStatus.None,
@@ -122,7 +122,7 @@ export const CARDS: Record<string, CardDef> = {
   [CardId.SwimFast]: {
     id: CardId.SwimFast, name: "Swim Fast", type: CardType.Physical, abilityStatus: AbilityStatus.None,
     creatureTypes: [CreatureType.Reptile, CreatureType.Amphibian], habitats: [Habitat.Water], staminaCost: 1,
-    description: "Passive: +2 Damage in Water. Active (Chase): 1 Stamina. Opponent cannot evade this turn. Counters Water Camouflage."
+    description: "Passive: +2 Damage in Water. Active (Chase): 1 Stamina. Opponent cannot evade next turn. Counters Water Camouflage."
   },
   [CardId.AmbushAttack]: {
     id: CardId.AmbushAttack, name: "Ambush Attack", type: CardType.Physical, abilityStatus: AbilityStatus.None,
@@ -237,9 +237,9 @@ export const CARDS: Record<string, CardDef> = {
     description: "Free Action. Escape Grappled/Stuck. +1 Damage this turn. Next flip guaranteed Heads."
   },
   [CardId.AdrenalineRush]: {
-    id: CardId.AdrenalineRush, name: "Adrenaline Rush", type: CardType.Ability, abilityStatus: AbilityStatus.None,
+    id: CardId.AdrenalineRush, name: "Adrenaline Rush", type: CardType.Ability, abilityStatus: AbilityStatus.ConsumableImpact,
     creatureTypes: 'All', habitats: 'All', staminaCost: 0,
-    description: "Free Action. Gain +1 Stamina now. Lose 1 Stamina next turn."
+    description: "Free Action. Gain +1 Stamina. Consumable. Lose 1 Stamina next turn."
   },
   [CardId.StickyTongue]: {
     id: CardId.StickyTongue, name: "Sticky Tongue", type: CardType.Ability, abilityStatus: AbilityStatus.None,
@@ -289,7 +289,7 @@ export const CARDS: Record<string, CardDef> = {
   [CardId.Agile]: {
     id: CardId.Agile, name: "Agile", type: CardType.Ability, abilityStatus: AbilityStatus.None,
     creatureTypes: 'All', habitats: 'All', staminaCost: 1,
-    description: "Passive: Automatically evade attacks (Costs 1 Stamina). Active (1 St): Attacks cannot miss this turn. Free Action."
+    description: "Passive: Can Evade attacks (Costs 2 Stamina). Active (1 St): Attacks cannot miss this turn."
   },
 };
 

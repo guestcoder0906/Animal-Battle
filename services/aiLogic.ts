@@ -1,5 +1,39 @@
-import { GameState, GameAction, CardType, CardId, AbilityStatus, CardInstance } from '../types';
+
+
+import { GameState, GameAction, CardType, CardId, AbilityStatus, CardInstance, PendingReaction } from '../types';
 import { CARDS } from '../constants';
+
+export const computeReaction = (state: GameState, aiId: string): GameAction | null => {
+   const reaction = state.pendingReaction;
+   if (!reaction || reaction.targetId !== aiId) return null;
+
+   const ai = state.players[aiId];
+   if (ai.stamina < 2) return { type: 'RESOLVE_AGILE', playerId: aiId, useAgile: false, rng: [] };
+
+   // Heuristic: When to evade?
+   let shouldEvade = false;
+   
+   // 1. Avoid Lethal
+   // Estimate damage of incoming attack
+   let estimatedDmg = 2;
+   if (reaction.attackCardId === CardId.DiveBomb || reaction.attackCardId === CardId.CrushingWeight) estimatedDmg = 4;
+   if (reaction.attackCardId === CardId.Bite) estimatedDmg = 3;
+   
+   if (ai.hp <= estimatedDmg) shouldEvade = true;
+
+   // 2. High Value Evasion
+   else if (estimatedDmg >= 3) shouldEvade = true;
+   
+   // 3. Random factor if healthy
+   else if (ai.hp < ai.maxHp * 0.5 && Math.random() > 0.4) shouldEvade = true;
+
+   return {
+       type: 'RESOLVE_AGILE',
+       playerId: aiId,
+       useAgile: shouldEvade,
+       rng: Array.from({length: 5}, () => Math.random())
+   };
+}
 
 export const computeAiActions = (state: GameState, aiId: string): GameAction[] => {
   const actions: GameAction[] = [];

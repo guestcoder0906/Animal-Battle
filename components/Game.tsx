@@ -1,6 +1,7 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
-import { GameState, PlayerState, CardType, GameAction, CardId, Habitat, CoinFlipEvent, GameNotification } from '../types';
+import { GameState, PlayerState, CardType, GameAction, CardId, Habitat, CoinFlipEvent, GameNotification, PendingReaction } from '../types';
 import { CARDS } from '../constants';
 import { Card } from './Card';
 
@@ -50,6 +51,10 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
   const opponentId = Object.keys(state.players).find(id => id !== playerId);
   const opponent = opponentId ? state.players[opponentId] : null;
   const isMyTurn = state.currentPlayer === playerId;
+  
+  // If there is a pending reaction, we pause normal interactions
+  const isInterrupted = !!state.pendingReaction;
+  const amIReacting = state.pendingReaction?.targetId === playerId;
 
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [inspectCardId, setInspectCardId] = useState<string | null>(null);
@@ -84,6 +89,8 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
   if (!me || !opponent) return <div className="text-white p-10">Waiting for opponent...</div>;
 
   const handleCardClick = (instanceId: string, location: 'hand' | 'formation', ownerId: string) => {
+    if (isInterrupted) return; // Disable clicks during interrupt
+
     const isMyCard = ownerId === playerId;
     
     if (!isMyCard) {
@@ -181,6 +188,15 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
      setSelectedCardId(null);
   };
 
+  const handleReaction = (useAgile: boolean) => {
+      dispatch({
+          type: 'RESOLVE_AGILE',
+          playerId,
+          useAgile,
+          rng: getRNG(5)
+      });
+  };
+
   const playSelected = () => {
     if (!selectedCardId) return;
     
@@ -228,6 +244,7 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
   
   // Validation for play button
   const canPlaySelected = () => {
+    if (isInterrupted) return false;
     if (!selectedDef || !isSelectedInHand) return false;
     if (selectedDef.isUpgrade) return false; // Force target selection for upgrades
     if (selectedDef.id === CardId.CrushingWeight && me.size !== 'Big') return false;
@@ -278,6 +295,35 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
     );
   };
 
+  const ReactionOverlay = ({ reaction }: { reaction: PendingReaction }) => {
+      const attacker = state.players[reaction.attackerId];
+      const def = CARDS[reaction.attackCardId];
+      
+      return (
+          <div className="fixed inset-0 z-[190] bg-black/90 flex flex-col items-center justify-center p-6 backdrop-blur-md animate-fade-in">
+              <div className="text-3xl font-bold text-red-500 mb-4 animate-pulse">⚠️ INCOMING ATTACK!</div>
+              <div className="text-white text-xl mb-8 text-center">
+                  <span className="font-bold text-amber-400">{attacker.name}</span> is attacking with <span className="font-bold text-red-400">{def.name}</span>!
+              </div>
+              <div className="flex gap-6">
+                  <button 
+                    onClick={() => handleReaction(true)}
+                    className="bg-blue-600 hover:bg-blue-500 text-white text-xl font-black py-4 px-8 rounded-xl shadow-[0_0_30px_rgba(37,99,235,0.6)] transform hover:scale-105 transition-all flex flex-col items-center"
+                  >
+                      <span>EVADE!</span>
+                      <span className="text-xs font-normal mt-1 opacity-80">(Costs 2 Stamina)</span>
+                  </button>
+                  <button 
+                    onClick={() => handleReaction(false)}
+                    className="bg-stone-700 hover:bg-stone-600 text-stone-300 text-xl font-black py-4 px-8 rounded-xl border border-stone-500 hover:border-white transition-all"
+                  >
+                      TAKE HIT
+                  </button>
+              </div>
+          </div>
+      );
+  };
+
   const CopycatOverlay = () => {
      if (!copycatMode) return null;
      return (
@@ -314,6 +360,7 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
              s.type === 'Hidden' ? 'bg-stone-700 border-stone-500 text-stone-300' : 
              s.type === 'Accurate' ? 'bg-yellow-900 border-yellow-500 text-yellow-100' : 
              s.type === 'DamageBuff' ? 'bg-red-700 border-red-400 text-white' :
+             s.type === 'Chasing' ? 'bg-blue-700 border-blue-400 text-white' :
              'bg-purple-900 border-purple-500 text-purple-100'}`}>{s.type === 'DamageBuff' ? '+1 DMG' : s.type}</span>
         ))}
       </div>
@@ -357,6 +404,15 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
       <InspectOverlay />
       <CopycatOverlay />
       {state.activeCoinFlip && <CoinFlipOverlay event={state.activeCoinFlip} />}
+      
+      {/* Reaction Overlay for Agile Choice */}
+      {amIReacting && state.pendingReaction && <ReactionOverlay reaction={state.pendingReaction} />}
+      {/* Simple blocker if waiting for opponent reaction */}
+      {isInterrupted && !amIReacting && (
+          <div className="fixed inset-0 z-[190] bg-black/50 flex items-center justify-center backdrop-blur-sm">
+              <div className="text-2xl font-bold text-white animate-pulse">Opponent is reacting...</div>
+          </div>
+      )}
 
       {/* Notifications */}
       <div className="fixed top-16 right-4 z-[150] flex flex-col items-end pointer-events-none space-y-2 max-w-[90%]">
@@ -424,7 +480,7 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
                <PlayerStats p={me} />
                
                <div className="flex gap-3 px-1 justify-end min-h-[28px] md:min-h-[32px]">
-                  {isPoisoned && isMyTurn && (
+                  {isPoisoned && isMyTurn && !isInterrupted && (
                     <button onClick={clearPoison} className="px-3 py-1 md:px-4 bg-green-800 text-green-100 text-[10px] md:text-xs font-bold rounded border border-green-600 hover:bg-green-700 animate-pulse shadow-lg hover:scale-105 transition-transform">🧪 Cure Poison (1 Stam)</button>
                   )}
                   {evolveMode !== 'none' && (
@@ -439,7 +495,7 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
                       key={c.instanceId} 
                       defId={c.defId}
                       instanceId={c.instanceId}
-                      isPlayable={isMyTurn && evolveMode === 'none'}
+                      isPlayable={isMyTurn && evolveMode === 'none' && !isInterrupted}
                       isSelected={selectedCardId === c.instanceId || evolveCardId === c.instanceId}
                       onClick={() => handleCardClick(c.instanceId, 'hand', me.id)}
                     />
@@ -450,7 +506,7 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
 
         {/* CONTROLS TOOLBAR - FIXED/STICKY AT BOTTOM */}
         <div className="grid grid-cols-4 md:grid-cols-5 gap-1 md:gap-2 p-2 md:p-3 bg-stone-950 border-t border-stone-800 shadow-[0_-10px_30px_rgba(0,0,0,0.5)] z-30 shrink-0">
-           {isMyTurn && !state.winner ? (
+           {isMyTurn && !state.winner && !isInterrupted ? (
              <>
                <button 
                  disabled={!selectedCardId || !isSelectedInHand || !canPlaySelected()}
@@ -484,13 +540,13 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
                </button>
              </>
            ) : (
-             <div className="col-span-4 md:col-span-4 text-center text-stone-500 italic py-2 md:py-3 flex items-center justify-center bg-stone-900/50 rounded-lg border border-stone-800 text-xs md:text-sm">{state.winner ? 'Game Over' : 'Opponent is thinking...'}</div>
+             <div className="col-span-4 md:col-span-4 text-center text-stone-500 italic py-2 md:py-3 flex items-center justify-center bg-stone-900/50 rounded-lg border border-stone-800 text-xs md:text-sm">{state.winner ? 'Game Over' : isInterrupted ? 'Waiting for reaction...' : 'Opponent is thinking...'}</div>
            )}
            
            <button 
-             disabled={!selectedCardId}
+             disabled={!selectedCardId || isInterrupted}
              onClick={() => selectedCardId && setInspectCardId(selectedCardId)}
-             className={`rounded-lg py-2 md:py-3 font-black text-[10px] md:text-sm transition-colors border col-span-4 md:col-span-1 mt-1 md:mt-0 ${selectedCardId ? 'bg-cyan-900/50 text-cyan-400 border-cyan-700 hover:bg-cyan-900' : 'bg-stone-900 text-stone-700 border-stone-800'}`}
+             className={`rounded-lg py-2 md:py-3 font-black text-[10px] md:text-sm transition-colors border col-span-4 md:col-span-1 mt-1 md:mt-0 ${selectedCardId && !isInterrupted ? 'bg-cyan-900/50 text-cyan-400 border-cyan-700 hover:bg-cyan-900' : 'bg-stone-900 text-stone-700 border-stone-800'}`}
            >
              INSPECT
            </button>

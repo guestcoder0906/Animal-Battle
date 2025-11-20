@@ -103,6 +103,104 @@ export const gameReducer = (state: GS, action: GA): GS => {
      return isHeads;
   };
 
+  // Helper to apply damage and side effects (Refactored from USE_ACTION)
+  const resolveAttackDamage = (attacker: PS, target: PS, def: CardDef, rng: number[]) => {
+      let rngIndex = 10; // Start offset to avoid collision with previous checks
+      let damage = 0;
+      
+      // Base Damage
+      if (def.id === CID.Bite) damage = 3;
+      else if (def.id === CID.ClawAttack) damage = 2;
+      else if (def.id === CID.GraspingTalons) damage = 2;
+      else if (def.id === CID.VenomousFangs) damage = 1;
+      else if (def.id === CID.DiveBomb) damage = 4;
+      else if (def.id === CID.StrongTail) damage = 2;
+      else if (def.id === CID.BigClaws) damage = 3;
+      else if (def.id === CID.PiercingBeak) damage = 2;
+      else if (def.id === CID.CrushingWeight) damage = 4;
+      else if (def.id === CID.DeathRoll) damage = 4;
+      else if (def.id === CID.StrongJaw) damage = 3; 
+      else if (def.id === CID.LargeHindLegs && (attacker.size === 'Medium' || attacker.size === 'Big')) damage = 2;
+
+      // Modifiers
+      if (attacker.formation.some(c => c.defId === CID.StrongBuild)) damage += 1;
+      if (newState.habitat === H.Water && attacker.formation.some(c => c.defId === CID.SwimsWell)) damage += 2;
+      if (newState.habitat === H.Water && attacker.formation.some(c => c.defId === CID.SwimFast)) damage += 2; // Swim Fast Bonus
+      if (newState.habitat === H.Water && attacker.creatureType === CT.Amphibian) damage += 1;
+      
+      // Damage Buff Status
+      if (attacker.statuses.some(s => s.type === 'DamageBuff')) {
+         damage += 1;
+      }
+
+      // Defense Calculation
+      let defense = 0;
+      if (target.formation.some(c => c.defId === CID.ArmoredScales)) defense += 1;
+      if (target.formation.some(c => c.defId === CID.ThickFur)) defense += 1;
+      if (target.formation.some(c => c.defId === CID.Fur) && performCoinFlip('Fur Defense', getRNG(rng, rngIndex++), target.id)) defense += 1;
+      if (target.formation.some(c => c.defId === CID.ArmoredExoskeleton)) {
+         if (!performCoinFlip('Exoskeleton', getRNG(rng, rngIndex++), attacker.id)) defense += 2;
+      }
+
+      if (def.id === CID.DiveBomb) defense = 0; 
+
+      // Spiky Body
+      if (target.formation.some(c => c.defId === CID.SpikyBody)) {
+         const attackerAgile = attacker.formation.some(c => c.defId === CID.SmallSize || c.defId === CID.Agile);
+         if (!attackerAgile) {
+            attacker.hp -= 1;
+            log(`${attacker.name} took 1 dmg (Spiky Body).`);
+         } else {
+            if (performCoinFlip('Spiky Body (Agile)', getRNG(rng, rngIndex++), attacker.id)) {
+                attacker.hp -= 1;
+            } else {
+                damage += 1;
+            }
+         }
+      }
+
+      // Barbed Quills
+      if (target.formation.some(c => c.defId === CID.BarbedQuills)) {
+         const hasArmor = attacker.formation.some(c => c.defId === CID.ArmoredExoskeleton || c.defId === CID.SpikyBody);
+         const isGrappled = target.statuses.some(s => s.type === 'Grappled');
+         
+         if (!hasArmor) {
+            const recoilDamage = isGrappled ? 2 : 1;
+            attacker.hp -= recoilDamage;
+            log(`${attacker.name} took ${recoilDamage} recoil damage (Barbed Quills).`);
+            notify(`${attacker.name} pricked by Quills!`, 'warning');
+         } else {
+            log(`${attacker.name}'s armor protected against Barbed Quills.`);
+         }
+      }
+      
+      // Poison Skin (Auto)
+      if (target.formation.some(c => c.defId === CID.PoisonSkin)) {
+          attacker.statuses.push({ type: 'Poisoned' });
+          log(`${attacker.name} was Poisoned by Poison Skin.`);
+          notify("Poisoned by skin!", 'warning');
+      }
+      
+      let finalDmg = Math.max(0, damage - defense);
+      target.hp -= finalDmg;
+      log(`${attacker.name} attacked for ${finalDmg} dmg.`);
+      notify(`Dealt ${finalDmg} damage!`, 'success');
+
+      // On Hit Effects
+      if (def.id === CID.VenomousFangs) {
+         target.statuses.push({ type: 'Poisoned' });
+      }
+      
+      if (def.id === CID.GraspingTalons && performCoinFlip('Grapple Chance', getRNG(rng, rngIndex++), attacker.id)) {
+          target.statuses.push({ type: 'Grappled' });
+      }
+      if (def.id === CID.StrongJaw) target.statuses.push({ type: 'Grappled' });
+      
+      if (def.id === CID.DeathRoll && performCoinFlip('Death Roll', getRNG(rng, rngIndex++), attacker.id)) {
+          target.statuses.push({ type: 'Grappled' });
+      }
+  };
+
   switch (action.type) {
     case 'INIT_GAME':
       // Apply Game Start Bonuses
@@ -145,6 +243,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
       newState.turn += 1;
       newState.phase = 'start';
       newState.activeCoinFlip = null; 
+      newState.pendingReaction = null;
 
       const nextPlayer = newState.players[opponentId];
       let rngIndex = 0;
@@ -473,10 +572,12 @@ export const gameReducer = (state: GS, action: GA): GS => {
          
          if (def.id === CID.SwimFast) {
              // Active Chase ability
-             p.statuses.push({ type: 'Chasing' });
+             // Prevent Chasing stacking and ensure duration covers next turn
+             p.statuses = p.statuses.filter(s => s.type !== 'Chasing');
+             p.statuses.push({ type: 'Chasing', duration: 2 }); // Lasts through opponent turn (1) and player turn (2)
              target.statuses.push({ type: 'CannotEvade', duration: 1 });
-             log(`${p.name} is Chasing! Opponent cannot evade.`);
-             notify("Chasing! Opponent cannot evade.", 'success');
+             log(`${p.name} is Chasing! Opponent cannot evade next turn.`);
+             notify("Chasing active!", 'success');
              return newState;
          }
          
@@ -515,34 +616,8 @@ export const gameReducer = (state: GS, action: GA): GS => {
              return newState;
          }
 
-         let damage = 0;
          let hit = true;
          const isAccurate = p.statuses.some(s => s.type === 'Accurate');
-         
-         // Base Damage
-         if (def.id === CID.Bite) damage = 3;
-         else if (def.id === CID.ClawAttack) damage = 2;
-         else if (def.id === CID.GraspingTalons) damage = 2;
-         else if (def.id === CID.VenomousFangs) damage = 1;
-         else if (def.id === CID.DiveBomb) damage = 4;
-         else if (def.id === CID.StrongTail) damage = 2;
-         else if (def.id === CID.BigClaws) damage = 3;
-         else if (def.id === CID.PiercingBeak) damage = 2;
-         else if (def.id === CID.CrushingWeight) damage = 4;
-         else if (def.id === CID.DeathRoll) damage = 4;
-         else if (def.id === CID.StrongJaw) damage = 3; 
-         else if (def.id === CID.LargeHindLegs && (p.size === 'Medium' || p.size === 'Big')) damage = 2;
-
-         // Modifiers
-         if (p.formation.some(c => c.defId === CID.StrongBuild)) damage += 1;
-         if (newState.habitat === H.Water && p.formation.some(c => c.defId === CID.SwimsWell)) damage += 2;
-         if (newState.habitat === H.Water && p.formation.some(c => c.defId === CID.SwimFast)) damage += 2; // Swim Fast Bonus
-         if (newState.habitat === H.Water && p.creatureType === CT.Amphibian) damage += 1;
-         
-         // Damage Buff Status
-         if (p.statuses.some(s => s.type === 'DamageBuff')) {
-            damage += 1;
-         }
 
          // HIT LOGIC
          const isTargetHidden = target.statuses.some(s => s.type === 'Hidden') || target.statuses.some(s => s.type === 'Camouflaged');
@@ -590,21 +665,23 @@ export const gameReducer = (state: GS, action: GA): GS => {
             }
          }
 
-         // Evasion
+         // Evasion Checks (Passive)
          if (hit) {
              const cannotEvade = target.statuses.some(s => s.type === 'CannotEvade');
              
-             // AGILE PASSIVE EVASION
-             if (!cannotEvade && target.formation.some(c => c.defId === CID.Agile) && target.stamina >= 1) {
-                 target.stamina -= 1;
-                 log(`${target.name} used Agile to evade! (-1 Stamina)`);
-                 notify("Agile Evasion!", 'success');
-                 hit = false;
-                 if (target.formation.some(c => c.defId === CID.SwiftReflexes) && target.stamina < target.maxStamina) {
-                     target.stamina += 1;
-                     log(`${target.name} gained Stamina (Swift Reflexes).`);
-                 }
+             // AGILE PASSIVE EVASION - NOW WITH CHOICE & COST 2
+             if (!cannotEvade && target.formation.some(c => c.defId === CID.Agile) && target.stamina >= 2) {
+                 // Trigger interrupt for player choice
+                 newState.pendingReaction = {
+                     type: 'AGILE_EVADE',
+                     attackerId: p.id,
+                     targetId: target.id,
+                     attackCardId: def.id
+                 };
+                 // Note: We return here to await user input. The attack resolution is paused.
+                 return newState;
              }
+             
              else if (!cannotEvade) {
                 const evades = target.formation.filter(c => c.defId === CID.LargeHindLegs || c.defId === CID.SwimFast);
                 if (evades.length > 0 && !target.statuses.some(s => s.type === 'Grappled')) { 
@@ -622,72 +699,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
          }
 
          if (hit) {
-            // Defense Calculation
-            let defense = 0;
-            if (target.formation.some(c => c.defId === CID.ArmoredScales)) defense += 1;
-            if (target.formation.some(c => c.defId === CID.ThickFur)) defense += 1;
-            if (target.formation.some(c => c.defId === CID.Fur) && performCoinFlip('Fur Defense', getRNG(action.rng, rngIndex++), target.id)) defense += 1;
-            if (target.formation.some(c => c.defId === CID.ArmoredExoskeleton)) {
-               if (!performCoinFlip('Exoskeleton', getRNG(action.rng, rngIndex++), p.id)) defense += 2;
-            }
-
-            if (def.id === CID.DiveBomb) defense = 0; 
-
-            // Spiky Body
-            if (target.formation.some(c => c.defId === CID.SpikyBody)) {
-               const attackerAgile = p.formation.some(c => c.defId === CID.SmallSize || c.defId === CID.Agile);
-               if (!attackerAgile) {
-                  p.hp -= 1;
-                  log(`${p.name} took 1 dmg (Spiky Body).`);
-               } else {
-                  if (performCoinFlip('Spiky Body (Agile)', getRNG(action.rng, rngIndex++), p.id)) {
-                      p.hp -= 1;
-                  } else {
-                      damage += 1;
-                  }
-               }
-            }
-
-            // Barbed Quills
-            if (target.formation.some(c => c.defId === CID.BarbedQuills)) {
-               const hasArmor = p.formation.some(c => c.defId === CID.ArmoredExoskeleton || c.defId === CID.SpikyBody);
-               const isGrappled = target.statuses.some(s => s.type === 'Grappled');
-               
-               if (!hasArmor) {
-                  const recoilDamage = isGrappled ? 2 : 1;
-                  p.hp -= recoilDamage;
-                  log(`${p.name} took ${recoilDamage} recoil damage (Barbed Quills).`);
-                  notify(`${p.name} pricked by Quills!`, 'warning');
-               } else {
-                  log(`${p.name}'s armor protected against Barbed Quills.`);
-               }
-            }
-            
-            // Poison Skin (Auto)
-            if (target.formation.some(c => c.defId === CID.PoisonSkin)) {
-                p.statuses.push({ type: 'Poisoned' });
-                log(`${p.name} was Poisoned by Poison Skin.`);
-                notify("Poisoned by skin!", 'warning');
-            }
-            
-            let finalDmg = Math.max(0, damage - defense);
-            target.hp -= finalDmg;
-            log(`${p.name} attacked for ${finalDmg} dmg.`);
-            notify(`Dealt ${finalDmg} damage!`, 'success');
-
-            // On Hit Effects
-            if (def.id === CID.VenomousFangs) {
-               target.statuses.push({ type: 'Poisoned' });
-            }
-            
-            if (def.id === CID.GraspingTalons && performCoinFlip('Grapple Chance', getRNG(action.rng, rngIndex++), p.id)) {
-                target.statuses.push({ type: 'Grappled' });
-            }
-            if (def.id === CID.StrongJaw) target.statuses.push({ type: 'Grappled' });
-            
-            if (def.id === CID.DeathRoll && performCoinFlip('Death Roll', getRNG(action.rng, rngIndex++), p.id)) {
-                target.statuses.push({ type: 'Grappled' });
-            }
+             resolveAttackDamage(p, target, def, action.rng);
          }
       }
 
@@ -797,6 +809,38 @@ export const gameReducer = (state: GS, action: GA): GS => {
       }
       
       return newState;
+    }
+
+    case 'RESOLVE_AGILE': {
+        if (!newState.pendingReaction) return state;
+        const { attackerId, targetId, attackCardId } = newState.pendingReaction;
+        
+        const attacker = newState.players[attackerId];
+        const target = newState.players[targetId];
+        const def = CARDS[attackCardId];
+        
+        if (action.useAgile) {
+            if (target.stamina >= 2) {
+                target.stamina -= 2;
+                log(`${target.name} chose to Evade (Agile)!`);
+                notify(`${target.name} Evaded!`, 'success');
+                
+                if (target.formation.some(c => c.defId === CID.SwiftReflexes) && target.stamina < target.maxStamina) {
+                    target.stamina += 1;
+                    log(`${target.name} gained Stamina (Swift Reflexes).`);
+                }
+                // Attack ends here
+            } else {
+                notify("Not enough stamina to evade!", 'error');
+                resolveAttackDamage(attacker, target, def, action.rng);
+            }
+        } else {
+            log(`${target.name} chose not to evade.`);
+            resolveAttackDamage(attacker, target, def, action.rng);
+        }
+        
+        newState.pendingReaction = null;
+        return newState;
     }
 
     default:

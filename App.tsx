@@ -1,9 +1,11 @@
+
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Game } from './components/Game';
 import { gameReducer, createPlayer } from './services/gameEngine';
 import { GameState, GameAction, Habitat } from './types';
 import { getRandomElement } from './constants';
-import { computeAiActions } from './services/aiLogic';
+import { computeAiActions, computeReaction } from './services/aiLogic';
 
 const App: React.FC = () => {
   const [status, setStatus] = useState<'menu' | 'playing'>('menu');
@@ -38,7 +40,19 @@ const App: React.FC = () => {
     if (!gameState || !gameState.currentPlayer || gameState.winner) return;
     
     const aiId = 'ai-bot';
-    if (gameState.currentPlayer === aiId && gameState.phase !== 'end') {
+    
+    // Check for Pending Reaction Target = AI
+    if (gameState.pendingReaction && gameState.pendingReaction.targetId === aiId) {
+        // AI needs to react
+        if (aiTurnTimeoutRef.current) clearTimeout(aiTurnTimeoutRef.current);
+        aiTurnTimeoutRef.current = setTimeout(() => {
+            const reaction = computeReaction(gameState, aiId);
+            if (reaction) dispatch(reaction);
+        }, 1000); // Delay reaction for UI effect
+        return;
+    }
+
+    if (gameState.currentPlayer === aiId && gameState.phase !== 'end' && !gameState.pendingReaction) {
       // It's AI's turn
       if (aiTurnTimeoutRef.current) clearTimeout(aiTurnTimeoutRef.current);
       
@@ -62,7 +76,7 @@ const App: React.FC = () => {
     return () => {
       if (aiTurnTimeoutRef.current) clearTimeout(aiTurnTimeoutRef.current);
     };
-  }, [gameState?.currentPlayer, gameState?.turn]); 
+  }, [gameState?.currentPlayer, gameState?.turn, gameState?.pendingReaction]); 
 
   const startGame = () => {
     const myId = 'local-player';
@@ -83,6 +97,7 @@ const App: React.FC = () => {
       winner: null,
       phase: 'start',
       activeCoinFlip: null,
+      pendingReaction: null,
       notifications: []
     };
 

@@ -87,13 +87,11 @@ export enum CardId {
   EnhancedSmell = 'enhanced_smell',
   Copycat = 'copycat',
   Agile = 'agile',
-  
-  // Special
-  Evolve = 'evolve',
+  Evolve = 'evolve'
 }
 
 export interface CardDef {
-  id: string;
+  id: CardId;
   name: string;
   type: CardType;
   abilityStatus: AbilityStatus;
@@ -101,20 +99,21 @@ export interface CardDef {
   habitats: Habitat[] | 'All';
   staminaCost: number;
   description: string;
+  maxCharges?: number;
   isUpgrade?: boolean;
-  upgradeTarget?: string[];
-  maxCharges?: number; 
+  upgradeTarget?: CardId[];
 }
 
 export interface CardInstance {
   instanceId: string;
-  defId: string;
+  defId: CardId;
   charges?: number;
 }
 
-export interface PlayerStatus {
-  type: 'Grappled' | 'Poisoned' | 'Stuck' | 'Blinded' | 'Confused' | 'Hidden' | 'Flying' | 'Camouflaged' | 'StaminaDebt' | 'CannotEvade' | 'Chasing' | 'Accurate' | 'DamageBuff' | 'CannotAttack' | 'Evading';
-  duration?: number; // 1 means this turn only
+export interface StatusEffect {
+  type: 'Poisoned' | 'Stuck' | 'Grappled' | 'Confused' | 'Hidden' | 'Camouflaged' | 'Flying' | 'CannotAttack' | 'CannotEvade' | 'Accurate' | 'DamageBuff' | 'StaminaDebt' | 'Evading' | 'Chasing';
+  duration?: number; // Turns remaining
+  value?: number;
 }
 
 export interface PlayerState {
@@ -130,24 +129,31 @@ export interface PlayerState {
   deck: CardInstance[];
   discard: CardInstance[];
   formation: CardInstance[];
-  statuses: PlayerStatus[];
-  cardsPlayedThisTurn: number; // Max 1
-  hasActedThisTurn: boolean; // Max 1
-  hasUsedForestHide?: boolean; // Once per game
-  guaranteedHeads?: boolean;
-}
-
-export interface CoinFlipEvent {
-  id: string;
-  result: 'Heads' | 'Tails';
-  reason: string;
-  timestamp: number;
+  statuses: StatusEffect[];
+  cardsPlayedThisTurn: number;
+  hasActedThisTurn: boolean;
+  guaranteedHeads: boolean;
+  hasUsedForestHide?: boolean;
 }
 
 export interface GameNotification {
   id: string;
   message: string;
   type: 'info' | 'error' | 'success' | 'warning';
+}
+
+export interface CoinFlipEvent {
+    id: string;
+    result: 'Heads' | 'Tails';
+    reason: string;
+    timestamp: number;
+}
+
+export interface PendingReaction {
+  type: 'AGILE_EVADE';
+  attackerId: string;
+  targetId: string;
+  attackCardId: string;
 }
 
 export interface GameState {
@@ -158,21 +164,23 @@ export interface GameState {
   players: Record<string, PlayerState>;
   log: string[];
   winner: string | null;
-  phase: 'start' | 'main' | 'end';
-  activeCoinFlip: CoinFlipEvent | null;
+  phase: 'start' | 'action' | 'end';
   notifications: GameNotification[];
+  activeCoinFlip: CoinFlipEvent | null;
+  pendingReaction: PendingReaction | null;
 }
 
-export type GameAction = 
+export type GameAction =
   | { type: 'INIT_GAME'; payload: GameState }
-  | { type: 'JOIN_GAME'; playerId: string; name: string } 
-  | { type: 'PLAY_CARD'; playerId: string; cardInstanceId: string; targetInstanceId?: string }
-  | { type: 'PLAY_EVOLVE_CARD'; playerId: string; evolveInstanceId: string; targetFormationId: string; replacementHandId: string }
-  | { type: 'USE_ACTION'; playerId: string; actionType: 'ATTACK' | 'ABILITY'; cardInstanceId?: string; targetPlayerId: string; rng?: number[]; targetHandCardId?: string }
-  | { type: 'CLEAR_POISON'; playerId: string }
-  | { type: 'ATTEMPT_GRAPPLE_ESCAPE'; playerId: string; rng?: number[] }
-  | { type: 'USE_HABITAT_ACTION'; playerId: string; rng?: number[] }
-  | { type: 'END_TURN'; playerId: string; rng?: number[] }
+  | { type: 'JOIN_GAME'; playerId: string; name: string }
   | { type: 'UPDATE_STATE'; payload: GameState }
+  | { type: 'PLAY_CARD'; playerId: string; cardInstanceId: string; targetInstanceId?: string }
+  | { type: 'USE_ACTION'; playerId: string; actionType: 'ATTACK' | 'ABILITY'; cardInstanceId: string; targetPlayerId: string; rng: number[]; targetHandCardId?: string }
+  | { type: 'END_TURN'; playerId: string; rng: number[] }
+  | { type: 'DISMISS_NOTIFICATION'; id: string }
   | { type: 'ACKNOWLEDGE_COIN_FLIP' }
-  | { type: 'DISMISS_NOTIFICATION'; id: string };
+  | { type: 'ATTEMPT_GRAPPLE_ESCAPE'; playerId: string; rng: number[] }
+  | { type: 'USE_HABITAT_ACTION'; playerId: string; rng: number[] }
+  | { type: 'CLEAR_POISON'; playerId: string }
+  | { type: 'PLAY_EVOLVE_CARD'; playerId: string; evolveInstanceId: string; targetFormationId: string; replacementHandId: string }
+  | { type: 'RESOLVE_AGILE'; playerId: string; useAgile: boolean; rng: number[] };
