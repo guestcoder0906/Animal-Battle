@@ -1,8 +1,3 @@
-
-
-
-
-
 import { CARDS, generateDeck, getRandomElement as randomElem } from '../constants';
 import { GameState as GS, PlayerState as PS, CardInstance as CI, CreatureType as CT, Habitat as H, CardType as CType, AbilityStatus as AS, CardDef, GameAction as GA, CardId as CID, GameNotification, StatusEffect } from '../types';
 
@@ -650,22 +645,19 @@ export const gameReducer = (state: GS, action: GA): GS => {
       }
 
       if (nextPlayer.deck.length > 0) {
-        let drawn = nextPlayer.deck.shift();
-        let checks = 0;
-        const MAX_CHECKS = nextPlayer.deck.length + 5; 
+        // Deterministically find a unique card
+        const uniqueCardIndex = nextPlayer.deck.findIndex(c => 
+            !nextPlayer.hand.some(h => h.defId === c.defId) && 
+            !nextPlayer.formation.some(f => f.defId === c.defId)
+        );
 
-        while (drawn && checks < MAX_CHECKS) {
-           const isDuplicate = nextPlayer.hand.some(c => c.defId === drawn!.defId) || 
-                               nextPlayer.formation.some(c => c.defId === drawn!.defId);
-           
-           if (isDuplicate) {
-              nextPlayer.deck.push(drawn); 
-              nextPlayer.deck.sort(() => 0.5 - Math.random()); 
-              drawn = nextPlayer.deck.shift();
-              checks++;
-           } else {
-              break; 
-           }
+        let drawn: CI | undefined;
+
+        if (uniqueCardIndex !== -1) {
+            drawn = nextPlayer.deck.splice(uniqueCardIndex, 1)[0];
+        } else {
+            // Fallback: Try top card (will likely be rejected by duplicate check below)
+            drawn = nextPlayer.deck.shift();
         }
   
         if (drawn) {

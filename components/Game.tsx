@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useRef } from 'react';
 import { GameState, PlayerState, CardType, GameAction, CardId, Habitat, CoinFlipEvent, GameNotification, PendingReaction, PendingChoice } from '../types';
 import { CARDS, STATUS_DESCRIPTIONS } from '../constants';
@@ -28,7 +26,7 @@ const ACTIVE_ABILITIES = [
   CardId.StandOnHindLegs
 ];
 
-const NotificationToast: React.FC<{ note: GameNotification }> = ({ note }) => {
+const NotificationToast: React.FC<{ note: GameNotification, onDismiss: () => void }> = ({ note, onDismiss }) => {
   const colors = {
     info: 'bg-blue-600/90 border-blue-400',
     error: 'bg-red-600/90 border-red-400',
@@ -37,7 +35,8 @@ const NotificationToast: React.FC<{ note: GameNotification }> = ({ note }) => {
   };
   return (
     <div className={`mb-2 px-4 py-2 md:px-6 md:py-3 rounded-lg border shadow-[0_5px_15px_rgba(0,0,0,0.5)] flex items-center justify-between min-w-[250px] md:min-w-[300px] animate-slide-in-right backdrop-blur-sm ${colors[note.type]}`}>
-       <span className="font-bold text-xs md:text-sm">{note.message}</span>
+       <span className="font-bold text-xs md:text-sm mr-2">{note.message}</span>
+       <button onClick={onDismiss} className="ml-3 text-white/60 hover:text-white font-bold p-1 hover:bg-white/10 rounded">✕</button>
     </div>
   );
 }
@@ -81,7 +80,7 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
     if (state.notifications.length > 0) {
       const timer = setTimeout(() => {
         dispatch({ type: 'DISMISS_NOTIFICATION', id: state.notifications[0].id });
-      }, 3500);
+      }, 3000);
       return () => clearTimeout(timer);
     }
   }, [state.notifications, dispatch]);
@@ -518,7 +517,13 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
       )}
 
       <div className="fixed top-16 right-4 z-[150] flex flex-col items-end pointer-events-none space-y-2 max-w-[90%]">
-        {state.notifications.map(n => <NotificationToast key={n.id} note={n} />)}
+        {state.notifications.map(n => (
+            <NotificationToast 
+                key={n.id} 
+                note={n} 
+                onDismiss={() => dispatch({ type: 'DISMISS_NOTIFICATION', id: n.id })} 
+            />
+        ))}
       </div>
 
       {evolveMode !== 'none' && (
