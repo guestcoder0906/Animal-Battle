@@ -180,6 +180,7 @@ export interface GameState {
   activeCoinFlip: CoinFlipEvent | null;
   pendingReaction: PendingReaction | null;
   pendingChoice: PendingChoice | null;
+  lastAction?: { playerId: string; cardId: CardId };
 }
 
 export type GameAction =

@@ -1,4 +1,5 @@
 
+
 import { CardDef, CardId, CardType, AbilityStatus, CreatureType, Habitat } from './types';
 
 export const CARDS: Record<string, CardDef> = {
@@ -84,7 +85,7 @@ export const CARDS: Record<string, CardDef> = {
   },
   [CardId.SwimsWell]: {
     id: CardId.SwimsWell, name: "Swims Well", type: CardType.Physical, abilityStatus: AbilityStatus.None,
-    creatureTypes: [CreatureType.Mammal, CreatureType.Amphibian], habitats: [Habitat.Water], staminaCost: 0,
+    creatureTypes: [CreatureType.Mammal, CreatureType.Amphibian, CreatureType.Reptile], habitats: [Habitat.Water], staminaCost: 0,
     description: "+1 damage in Water habitat."
   },
   [CardId.StrongBuild]: {
@@ -127,7 +128,8 @@ export const CARDS: Record<string, CardDef> = {
   [CardId.SwimFast]: {
     id: CardId.SwimFast, name: "Swim Fast", type: CardType.Physical, abilityStatus: AbilityStatus.None,
     creatureTypes: [CreatureType.Reptile, CreatureType.Amphibian], habitats: [Habitat.Water], staminaCost: 1,
-    description: "Passive: +2 Damage in Water. Active (Chase): 1 Stamina. Opponent cannot evade next turn. Counters Water Camouflage."
+    description: "Upgrade Swims Well. Passive: +2 Damage in Water. Active (Chase): 1 Stamina. Opponent cannot evade next turn. Counters Water Camouflage.",
+    isUpgrade: true, upgradeTarget: [CardId.SwimsWell]
   },
   [CardId.AmbushAttack]: {
     id: CardId.AmbushAttack, name: "Ambush Attack", type: CardType.Physical, abilityStatus: AbilityStatus.None,
@@ -272,9 +274,9 @@ export const CARDS: Record<string, CardDef> = {
     description: "Flip Coin: Heads = Opponent discards hand. Consumable."
   },
   [CardId.Mimicry]: {
-    id: CardId.Mimicry, name: "Mimicry", type: CardType.Ability, abilityStatus: AbilityStatus.None,
+    id: CardId.Mimicry, name: "Mimicry", type: CardType.Ability, abilityStatus: AbilityStatus.ConsumableImpact,
     creatureTypes: [CreatureType.Avian], habitats: 'All', staminaCost: 1,
-    description: "Copy opponent's last move."
+    description: "Consumable. Copy opponent's last action."
   },
   [CardId.ExhaustingRoar]: {
     id: CardId.ExhaustingRoar, name: "Exhausting Roar", type: CardType.Ability, abilityStatus: AbilityStatus.None,
