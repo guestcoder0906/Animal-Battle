@@ -1,0 +1,5 @@
+{
+  "name": "Animal Battle Arena",
+  "description": "A real-time multiplayer card battler where players build creature decks and fight in various habitats.",
+  "requestFramePermissions": []
+}
