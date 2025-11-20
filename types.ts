@@ -62,6 +62,7 @@ export enum CardId {
   CrushingWeight = 'crushing_weight',
   Amphibious = 'amphibious',
   Camouflage = 'camouflage', // Moved to Physical
+  Leech = 'leech',
 
   // Abilities
   ShortBurst = 'short_burst',
@@ -112,9 +113,10 @@ export interface CardInstance {
 }
 
 export interface StatusEffect {
-  type: 'Poisoned' | 'Stuck' | 'Grappled' | 'Confused' | 'Hidden' | 'Camouflaged' | 'Flying' | 'CannotAttack' | 'CannotEvade' | 'Accurate' | 'DamageBuff' | 'StaminaDebt' | 'Evading' | 'Chasing' | 'Climbing';
+  type: 'Poisoned' | 'Stuck' | 'Grappled' | 'Confused' | 'Hidden' | 'Camouflaged' | 'Flying' | 'CannotAttack' | 'CannotEvade' | 'Accurate' | 'DamageBuff' | 'StaminaDebt' | 'Evading' | 'Chasing' | 'Climbing' | 'Leeched';
   duration?: number; // Turns remaining
   value?: number;
+  sourceId?: string; // ID of the player who applied the status (for Leech healing)
 }
 
 export interface PlayerState {
@@ -192,6 +194,7 @@ export type GameAction =
   | { type: 'ATTEMPT_GRAPPLE_ESCAPE'; playerId: string; rng: number[] }
   | { type: 'USE_HABITAT_ACTION'; playerId: string; rng: number[] }
   | { type: 'CLEAR_POISON'; playerId: string }
+  | { type: 'CLEAR_LEECH'; playerId: string }
   | { type: 'PLAY_EVOLVE_CARD'; playerId: string; evolveInstanceId: string; targetFormationId: string; replacementHandId: string }
   | { type: 'PLAY_APEX_EVOLUTION'; playerId: string; apexCardInstanceId: string; targetFormationInstanceId: string }
   | { type: 'RESOLVE_AGILE'; playerId: string; useAgile: boolean; rng: number[] }

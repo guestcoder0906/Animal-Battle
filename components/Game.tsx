@@ -1,8 +1,7 @@
 
-
 import React, { useState, useEffect, useRef } from 'react';
 import { GameState, PlayerState, CardType, GameAction, CardId, Habitat, CoinFlipEvent, GameNotification, PendingReaction, PendingChoice } from '../types';
-import { CARDS } from '../constants';
+import { CARDS, STATUS_DESCRIPTIONS } from '../constants';
 import { Card } from './Card';
 
 interface GameProps {
@@ -15,7 +14,7 @@ const ACTIVE_PHYSICALS = [
   CardId.ClawAttack, CardId.Bite, CardId.StrongJaw, CardId.LargeHindLegs, 
   CardId.BigClaws, CardId.StrongTail, CardId.DeathRoll, CardId.SwimFast, 
   CardId.AmbushAttack, CardId.GraspingTalons, CardId.DiveBomb, CardId.PiercingBeak, 
-  CardId.VenomousFangs, CardId.CrushingWeight, CardId.Camouflage
+  CardId.VenomousFangs, CardId.CrushingWeight, CardId.Camouflage, CardId.Leech
 ];
 
 const ACTIVE_ABILITIES = [
@@ -60,6 +59,7 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [inspectCardId, setInspectCardId] = useState<string | null>(null);
   const [showLog, setShowLog] = useState(false);
+  const [showStatusInfo, setShowStatusInfo] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
 
   // Evolve State
@@ -268,6 +268,10 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
     dispatch({ type: 'CLEAR_POISON', playerId });
   }
 
+  const clearLeech = () => {
+    dispatch({ type: 'CLEAR_LEECH', playerId });
+  }
+
   const getCardByInstanceId = (id: string) => {
     return me.hand.find(c => c.instanceId === id) ||
            me.formation.find(c => c.instanceId === id) ||
@@ -285,6 +289,7 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
   const isSelectedInHand = me.hand.some(c => c.instanceId === selectedCardId);
   const isSelectedInFormation = me.formation.some(c => c.instanceId === selectedCardId);
   const isPoisoned = me.statuses.some(s => s.type === 'Poisoned');
+  const isLeeched = me.statuses.some(s => s.type === 'Leeched');
   const canUpgrade = isSelectedInHand && selectedDef?.isUpgrade;
   
   // Validation for play button
@@ -337,6 +342,26 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
           <Card defId={card.defId} instanceId={card.instanceId} charges={card.charges} isSelected={false} noHover={true} />
           <button onClick={() => setInspectCardId(null)} className="absolute -top-6 -right-6 bg-stone-700 text-white border border-stone-500 rounded-full w-8 h-8 flex items-center justify-center font-bold hover:bg-stone-600 shadow-lg">✕</button>
         </div>
+      </div>
+    );
+  };
+
+  const StatusInfoOverlay = () => {
+    if (!showStatusInfo) return null;
+    return (
+      <div className="fixed inset-0 z-[160] bg-black/90 flex items-center justify-center p-6 backdrop-blur-md animate-fade-in" onClick={() => setShowStatusInfo(false)}>
+          <div className="bg-stone-800 border-2 border-stone-600 rounded-xl max-w-lg w-full max-h-[80vh] overflow-y-auto shadow-2xl p-6 relative" onClick={e => e.stopPropagation()}>
+              <button onClick={() => setShowStatusInfo(false)} className="absolute top-4 right-4 text-stone-400 hover:text-white font-bold text-xl">✕</button>
+              <h2 className="text-2xl font-bold text-amber-500 mb-6 border-b border-stone-700 pb-2">Status Effects</h2>
+              <div className="space-y-4">
+                  {Object.entries(STATUS_DESCRIPTIONS).map(([name, desc]) => (
+                      <div key={name} className="flex flex-col">
+                          <div className="font-bold text-lg text-white">{name}</div>
+                          <div className="text-stone-400 text-sm">{desc}</div>
+                      </div>
+                  ))}
+              </div>
+          </div>
       </div>
     );
   };
@@ -417,7 +442,10 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
 
   const PlayerStats = ({ p, isOpponent }: { p: PlayerState, isOpponent?: boolean }) => (
     <div className={`flex items-center gap-2 text-xs md:text-sm bg-black/60 p-2 rounded border border-white/10 w-full justify-between shadow-md shrink-0 ${isOpponent ? 'flex-row-reverse' : ''}`}>
-      <div className="font-bold text-amber-500 truncate max-w-[80px] md:max-w-[150px]">{p.name}</div>
+      <div className="font-bold text-amber-500 truncate max-w-[80px] md:max-w-[150px] flex items-center gap-2">
+          {p.name} 
+          {!isOpponent && <button onClick={() => setShowStatusInfo(true)} className="w-4 h-4 rounded-full bg-stone-600 text-white text-[10px] flex items-center justify-center border border-stone-400 hover:bg-stone-500" title="Status Info">?</button>}
+      </div>
       <div className="flex gap-3 font-mono text-sm">
         <span className="text-red-400 font-bold drop-shadow-sm">HP:{p.hp}/{p.maxHp}</span>
         <span className="text-yellow-400 font-bold drop-shadow-sm">ST:{p.stamina}/{p.maxStamina}</span>
@@ -426,6 +454,7 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
         {p.statuses.map((s, i) => (
           <span key={i} className={`px-1.5 py-0.5 rounded text-[9px] font-bold border shadow-sm truncate max-w-full ${
              s.type === 'Poisoned' ? 'bg-green-900 border-green-500 text-green-100' : 
+             s.type === 'Leeched' ? 'bg-lime-900 border-lime-500 text-lime-100' :
              s.type === 'Grappled' ? 'bg-orange-900 border-orange-500 text-orange-100' : 
              s.type === 'Camouflaged' ? 'bg-cyan-900 border-cyan-500 text-cyan-100' : 
              s.type === 'Hidden' ? 'bg-stone-700 border-stone-500 text-stone-300' : 
@@ -480,6 +509,7 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
       
       <InspectOverlay />
       <CopycatOverlay />
+      <StatusInfoOverlay />
       {state.activeCoinFlip && <CoinFlipOverlay event={state.activeCoinFlip} />}
       
       {/* Reaction Overlay for Agile Choice */}
@@ -565,6 +595,9 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
                   {isPoisoned && isMyTurn && !isInterrupted && (
                     <button onClick={clearPoison} className="px-3 py-1 md:px-4 bg-green-800 text-green-100 text-[10px] md:text-xs font-bold rounded border border-green-600 hover:bg-green-700 animate-pulse shadow-lg hover:scale-105 transition-transform">🧪 Cure Poison (1 Stam)</button>
                   )}
+                  {isLeeched && isMyTurn && !isInterrupted && (
+                    <button onClick={clearLeech} className="px-3 py-1 md:px-4 bg-lime-800 text-lime-100 text-[10px] md:text-xs font-bold rounded border border-lime-600 hover:bg-lime-700 animate-pulse shadow-lg hover:scale-105 transition-transform">🦟 Remove Leech (1 Stam)</button>
+                  )}
                   {evolveMode !== 'none' && (
                      <button onClick={() => {setEvolveMode('none'); setEvolveCardId(null); setEvolveTargetId(null);}} className="px-3 py-1 md:px-4 bg-stone-700 text-white text-[10px] md:text-xs font-bold rounded border border-stone-500 hover:bg-stone-600 shadow-lg">Cancel Selection</button>
                   )}
@@ -636,4 +669,3 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
       </div>
     </div>
   );
-}

@@ -38,7 +38,7 @@ export const CARDS: Record<string, CardDef> = {
   [CardId.ArmoredExoskeleton]: {
     id: CardId.ArmoredExoskeleton, name: "Armored Exoskeleton", type: CardType.Physical, abilityStatus: AbilityStatus.None,
     creatureTypes: [CreatureType.Mammal, CreatureType.Reptile], habitats: [Habitat.Desert], staminaCost: 0,
-    description: "Attacking creature flips coin; tails = attack deals 2 less damage."
+    description: "Attacking creature flips coin; tails = attack deals 2 less damage. Prevents Leech."
   },
   [CardId.ClawAttack]: {
     id: CardId.ClawAttack, name: "Claw Attack", type: CardType.Physical, abilityStatus: AbilityStatus.None,
@@ -75,7 +75,7 @@ export const CARDS: Record<string, CardDef> = {
   [CardId.ThickFur]: {
     id: CardId.ThickFur, name: "Thick Fur", type: CardType.Physical, abilityStatus: AbilityStatus.None,
     creatureTypes: [CreatureType.Mammal], habitats: 'All', staminaCost: 0,
-    description: "Upgrade Fur. Reduces 1 damage from all attacks.",
+    description: "Upgrade Fur. Reduces 1 damage from all attacks. Prevents Leech.",
     isUpgrade: true, upgradeTarget: [CardId.Fur]
   },
   [CardId.StandOnHindLegs]: {
@@ -112,7 +112,7 @@ export const CARDS: Record<string, CardDef> = {
   [CardId.ArmoredScales]: {
     id: CardId.ArmoredScales, name: "Armored Scales", type: CardType.Physical, abilityStatus: AbilityStatus.None,
     creatureTypes: [CreatureType.Reptile], habitats: 'All', staminaCost: 0,
-    description: "Reduces all damage by 1."
+    description: "Reduces all damage by 1. Prevents Leech."
   },
   [CardId.DeathRoll]: {
     id: CardId.DeathRoll, name: "Death Roll", type: CardType.Physical, abilityStatus: AbilityStatus.None,
@@ -179,6 +179,11 @@ export const CARDS: Record<string, CardDef> = {
     id: CardId.Amphibious, name: "Amphibious", type: CardType.Physical, abilityStatus: AbilityStatus.None,
     creatureTypes: [CreatureType.Amphibian], habitats: [Habitat.Water], staminaCost: 0,
     description: "Passive: Regenerate 1 HP at end of turn in Water."
+  },
+  [CardId.Leech]: {
+    id: CardId.Leech, name: "Leech", type: CardType.Physical, abilityStatus: AbilityStatus.None,
+    creatureTypes: [CreatureType.Amphibian], habitats: 'All', staminaCost: 1,
+    description: "Deal 1 Dmg. Flip Coin (Tails) = Poison. Applies Leeched unless target is Armored/Thick Fur."
   },
 
   // --- ABILITIES ---
@@ -297,6 +302,25 @@ export const CARDS: Record<string, CardDef> = {
     creatureTypes: 'All', habitats: 'All', staminaCost: 0,
     description: "Passive: Can Evade attacks (Costs 2 Stamina). Active (Free): Attacks cannot miss this turn."
   },
+};
+
+export const STATUS_DESCRIPTIONS: Record<string, string> = {
+  'Poisoned': 'Take 1 Damage at start of turn.',
+  'Leeched': 'Take 1 Damage at start of turn. Heals attacker +1 HP at start of their turn.',
+  'Stuck': 'Cannot Attack or use mobility actions.',
+  'Grappled': 'Must flip Heads to Attack. Cannot Evade.',
+  'Confused': 'Flip coin to act. Tails = Action Fails.',
+  'Hidden': 'Cannot be targeted by attacks.',
+  'Camouflaged': 'Attacks have 50% chance to miss you.',
+  'Flying': 'Evades melee attacks on 50% tails. Immune to climbing evasion.',
+  'CannotAttack': 'Prevented from using Attack cards.',
+  'CannotEvade': 'Cannot evade attacks.',
+  'Accurate': 'Attacks cannot miss due to Evasion/Stealth.',
+  'DamageBuff': '+1 Damage dealt.',
+  'StaminaDebt': 'Lose 1 Stamina at start of turn.',
+  'Evading': 'Next incoming attack will miss.',
+  'Chasing': 'Ignores target evasion and stealth.',
+  'Climbing': 'Evades attacks from non-flying opponents.'
 };
 
 export const getRandomElement = <T>(arr: T[]): T => {

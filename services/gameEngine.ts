@@ -1,5 +1,4 @@
 
-
 import { CARDS, generateDeck, getRandomElement as randomElem } from '../constants';
 import { GameState as GS, PlayerState as PS, CardInstance as CI, CreatureType as CT, Habitat as H, CardType as CType, AbilityStatus as AS, CardDef, GameAction as GA, CardId as CID, GameNotification } from '../types';
 
@@ -103,7 +102,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
      return isHeads;
   };
 
-  // Helper to apply damage and side effects (Refactored from USE_ACTION)
+  // Helper to apply damage and side effects
   const resolveAttackDamage = (attacker: PS, target: PS, def: CardDef, rng: number[]) => {
       let rngIndex = 10; // Start offset to avoid collision with previous checks
       let damage = 0;
@@ -124,6 +123,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
       else if (def.id === CID.DeathRoll) damage = 4;
       else if (def.id === CID.StrongJaw) damage = 3; 
       else if (def.id === CID.LargeHindLegs && (attacker.size === 'Medium' || attacker.size === 'Big')) damage = 2;
+      else if (def.id === CID.Leech) damage = 1;
 
       // Modifiers
       if (attacker.formation.some(c => c.defId === CID.StrongBuild)) damage += 1;
@@ -193,6 +193,35 @@ export const gameReducer = (state: GS, action: GA): GS => {
       if (def.id === CID.VenomousFangs) {
          target.statuses.push({ type: 'Poisoned' });
       }
+
+      if (def.id === CID.Leech) {
+          // Poison chance
+          const poisonFlip = performCoinFlip('Leech Poison', getRNG(rng, rngIndex++), target.id);
+          if (!poisonFlip) { // Tails = Poisoned
+              target.statuses.push({ type: 'Poisoned' });
+              log("Leech applied Poison!");
+          }
+
+          // Leech Status check
+          const hasProtection = target.formation.some(c => 
+              c.defId === CID.ArmoredScales || 
+              c.defId === CID.ArmoredExoskeleton || 
+              c.defId === CID.ThickFur
+          );
+
+          if (!hasProtection) {
+              // Check if already leeched by this source
+              const existing = target.statuses.find(s => s.type === 'Leeched' && s.sourceId === attacker.id);
+              if (!existing) {
+                  target.statuses.push({ type: 'Leeched', sourceId: attacker.id });
+                  log(`${target.name} is Leeched!`);
+                  notify("Leeched!", 'success');
+              }
+          } else {
+              log(`${target.name}'s armor prevented Leeching.`);
+              notify("Leech blocked by armor/fur.", 'warning');
+          }
+      }
       
       if (def.id === CID.GraspingTalons && performCoinFlip('Grapple Chance', getRNG(rng, rngIndex++), attacker.id)) {
           target.statuses.push({ type: 'Grappled' });
@@ -255,7 +284,9 @@ export const gameReducer = (state: GS, action: GA): GS => {
       newState.pendingReaction = null;
       newState.pendingChoice = null;
 
-      const nextPlayer = newState.players[opponentId];
+      const nextPlayer = newState.players[opponentId]; // The player starting their turn
+      const previousPlayer = player; // The player who just ended turn
+
       let rngIndex = 0;
       
       // 1. Status Management & Start of Turn Effects
@@ -288,6 +319,23 @@ export const gameReducer = (state: GS, action: GA): GS => {
           nextPlayer.hp -= 1;
           log(`${nextPlayer.name} took 1 poison damage.`);
           notify(`${nextPlayer.name} took Poison damage`, 'warning');
+      }
+
+      // Leech Damage (Victim takes damage)
+      if (nextPlayer.statuses.some(s => s.type === 'Leeched')) {
+          nextPlayer.hp -= 1;
+          log(`${nextPlayer.name} took 1 damage from Leech.`);
+          notify(`${nextPlayer.name} drained by Leech`, 'warning');
+      }
+
+      // Leech Healing (Attacker heals if they have an active leech on opponent)
+      const leechOnOpponent = previousPlayer.statuses.find(s => s.type === 'Leeched' && s.sourceId === nextPlayer.id);
+      if (leechOnOpponent) {
+          if (nextPlayer.hp < nextPlayer.maxHp) {
+              nextPlayer.hp += 1;
+              log(`${nextPlayer.name} healed 1 HP from Leeching.`);
+              notify("Healed from Leech!", 'success');
+          }
       }
 
       // Clear Duration based statuses
@@ -584,399 +632,45 @@ export const gameReducer = (state: GS, action: GA): GS => {
       p.stamina -= 1;
       p.hasActedThisTurn = true;
       p.statuses = p.statuses.filter(s => s.type !== 'Poisoned');
-      log(`${p.name} cleared Poison.`);
-      notify('Poison cleared', 'success');
+      log(`${p.name} cured Poison.`);
+      notify("Cured Poison!", 'success');
       return newState;
     }
 
-    case 'USE_ACTION': {
-      const p = newState.players[action.playerId];
-      const target = newState.players[action.targetPlayerId];
-      const cardInFormation = p.formation.find(c => c.instanceId === action.cardInstanceId);
-      const def = cardInFormation ? CARDS[cardInFormation.defId] : null;
-
-      if (!def) return state;
-
-      const isConfused = p.statuses.some(s => s.type === 'Confused');
-      const isGrappled = p.statuses.some(s => s.type === 'Grappled');
-      const isStuck = p.statuses.some(s => s.type === 'Stuck');
-
-      if (isConfused) {
-         notify("You are Confused and cannot act!", 'error');
-         return state;
-      }
-      
-      // Stuck prevents attacks, but some abilities might free you (Rage, Focus)
-      if (isStuck && action.actionType === 'ATTACK') {
-         notify("You are Stuck and cannot attack!", 'error');
-         return state;
-      }
-
-      // Exceptions for things that don't count as main action
-      const isFreeAction = def.id === CID.EnhancedSmell || def.id === CID.SwimFast || def.id === CID.ShortBurst ||
-                           ((def.id === CID.Agile || def.id === CID.Focus || def.id === CID.Rage || def.id === CID.AdrenalineRush) && action.actionType === 'ABILITY');
-
-      if (p.hasActedThisTurn && !isFreeAction) {
-         notify("Already acted this turn!", 'error');
-         return state;
-      }
-      if (p.stamina < def.staminaCost) {
-        notify("Not enough Stamina!", 'error');
-        return state;
-      }
-
-      // Grapple Check for Attacks
-      if (isGrappled && action.actionType === 'ATTACK') {
-          notify("You are Grappled! Must flip heads to attack.", 'warning');
-          const grappleFlip = performCoinFlip('Grappled Attack Check', getRNG(action.rng, 0), p.id);
-          if (!grappleFlip) {
-              p.stamina -= def.staminaCost; 
-              p.hasActedThisTurn = true;
-              log(`${p.name} failed grapple check.`);
-              return newState;
-          } else {
-              log(`${p.name} overcame grapple!`);
-              p.statuses = p.statuses.filter(s => s.type !== 'Grappled');
-          }
-      }
-
-      // Check CannotAttack status
-      if (action.actionType === 'ATTACK' && p.statuses.some(s => s.type === 'CannotAttack')) {
-          notify("You cannot attack this turn (Roared)!", 'error');
-          return state;
-      }
-
-      p.stamina -= def.staminaCost;
-      if (!isFreeAction) {
+    case 'CLEAR_LEECH': {
+        const p = newState.players[action.playerId];
+        if (!p.statuses.some(s => s.type === 'Leeched')) return state;
+        if (p.hasActedThisTurn) { notify("Already acted", 'error'); return state; }
+        if (p.stamina < 1) { notify("Not enough stamina", 'error'); return state; }
+  
+        p.stamina -= 1;
         p.hasActedThisTurn = true;
-      }
-
-      let rngIndex = 1;
-
-      // -- ATTACK (and Physical Utility) --
-      if (action.actionType === 'ATTACK') {
-         // Big Claws Choice Logic
-         if (def.id === CID.BigClaws) {
-             newState.pendingChoice = {
-                 id: Math.random().toString(36),
-                 playerId: p.id,
-                 cardId: def.id,
-                 options: ['Attack', 'Dig', 'Climb'],
-                 targetPlayerId: target.id
-             };
-             // Pause execution until choice is made
-             return newState;
-         }
-
-         // Handle Physical Utilities that don't deal standard damage
-         
-         if (def.id === CID.SwimFast) {
-             // Active Chase ability
-             // Prevent Chasing stacking and ensure duration covers next turn
-             p.statuses = p.statuses.filter(s => s.type !== 'Chasing');
-             p.statuses.push({ type: 'Chasing', duration: 2 }); // Lasts through opponent turn (1) and player turn (2)
-             target.statuses.push({ type: 'CannotEvade', duration: 1 });
-             log(`${p.name} is Chasing! Opponent cannot evade next turn.`);
-             notify("Chasing active!", 'success');
-             return newState;
-         }
-         
-         // ACTIVE EVASION FOR SMALL CREATURES
-         if (def.id === CID.LargeHindLegs && p.size === 'Small') {
-             p.statuses.push({ type: 'Evading', duration: 1 });
-             log(`${p.name} prepares to evade (Large Hind Legs).`);
-             notify("Evasion ready!", 'success');
-             return newState;
-         }
-
-         if (def.id === CID.Camouflage) {
-            if (performCoinFlip('Camouflage', getRNG(action.rng, rngIndex++), p.id)) {
-               p.statuses.push({ type: 'Camouflaged' });
-               notify("Camouflaged!", 'success');
-            } else {
-               notify("Failed to Camouflage.", 'warning');
-            }
-            // Consumes charge if any
-            if (cardInFormation && cardInFormation.charges !== undefined) {
-                cardInFormation.charges -= 1;
-                if (cardInFormation.charges <= 0) {
-                    p.formation = p.formation.filter(c => c.instanceId !== action.cardInstanceId);
-                }
-            }
-            return newState;
-         }
-
-         if (def.id === CID.AmbushAttack) {
-             if (performCoinFlip('Ambush Attack Setup', getRNG(action.rng, rngIndex++), p.id)) {
-                 target.statuses.push({ type: 'CannotEvade', duration: 2 }); // Lasts until they are attacked?
-                 notify("Ambush set! Opponent cannot evade.", 'success');
-             } else {
-                 notify("Ambush failed.", 'warning');
-             }
-             return newState;
-         }
-
-         let hit = true;
-         const isAccurate = p.statuses.some(s => s.type === 'Accurate');
-
-         // HIT LOGIC
-         const isTargetHidden = target.statuses.some(s => s.type === 'Hidden') || target.statuses.some(s => s.type === 'Camouflaged');
-         const isTargetEvading = target.statuses.some(s => s.type === 'Evading');
-         
-         // Climbing Defense Check
-         const isTargetClimbing = target.statuses.some(s => s.type === 'Climbing');
-         if (isTargetClimbing) {
-             const attackerFlying = p.statuses.some(s => s.type === 'Flying') || def.id === CID.DiveBomb || def.id === CID.Flight;
-             if (!attackerFlying) {
-                 log(`${p.name} cannot reach Climbing target!`);
-                 notify("Target is Climbing!", 'error');
-                 hit = false;
-             }
-         }
-
-         if (hit && isTargetHidden && !isAccurate) {
-             const hasDetection = p.formation.some(c => c.defId === CID.KeenEyesight || c.defId === CID.Whiskers || c.defId === CID.EnhancedSmell); 
-             if (!hasDetection) {
-                if (target.statuses.some(s => s.type === 'Camouflaged')) {
-                   const flip = performCoinFlip('Attack Camouflaged', getRNG(action.rng, rngIndex++), p.id);
-                   if (!flip) {
-                      log(`${p.name} missed Camouflaged target.`);
-                      notify("Missed (Camouflaged)!", 'warning');
-                      hit = false;
-                   }
-                } else {
-                   log(`${p.name} cannot find Hidden target.`);
-                   notify("Target is Hidden!", 'error');
-                   hit = false;
-                }
-             } else {
-                log(`${p.name} spotted Hidden target!`);
-             }
-         } else if (hit && target.formation.some(c => c.defId === CID.CamouflageWater) && newState.habitat === H.Water && !isAccurate) {
-             // Water Camouflage Logic (Updated to attacker coin flip)
-             const isChasing = p.statuses.some(s => s.type === 'Chasing');
-             if (isChasing) {
-                 log(`${p.name} chases through Water Camouflage!`);
-             } else {
-                 // Attacker flips coin. Heads = Hit, Tails = Miss.
-                 const flip = performCoinFlip('Water Camo (Attacker)', getRNG(action.rng, rngIndex++), p.id);
-                 if (!flip) {
-                     log(`${p.name} missed (Water Camouflage).`);
-                     notify("Missed (Water Camo)!", 'warning');
-                     hit = false;
-                 } else {
-                     log(`${p.name} hit through Water Camouflage!`);
-                 }
-             }
-         } else if (hit && isTargetEvading && !isAccurate) {
-             log(`${p.name} missed (Opponent Evading).`);
-             notify("Attack Evaded!", 'warning');
-             hit = false;
-         }
-
-         if (hit && target.statuses.some(s => s.type === 'Flying') && !isAccurate) {
-            const flip = performCoinFlip('Hit Flying Target', getRNG(action.rng, rngIndex++), p.id);
-            if (!flip) {
-               log(`${p.name} missed Flying target.`);
-               hit = false;
-            }
-         }
-
-         // Evasion Checks (Passive)
-         if (hit) {
-             const cannotEvade = target.statuses.some(s => s.type === 'CannotEvade');
-             
-             // AGILE PASSIVE EVASION - NOW WITH CHOICE & COST 2
-             if (!cannotEvade && target.formation.some(c => c.defId === CID.Agile) && target.stamina >= 2) {
-                 // Trigger interrupt for player choice
-                 newState.pendingReaction = {
-                     type: 'AGILE_EVADE',
-                     attackerId: p.id,
-                     targetId: target.id,
-                     attackCardId: def.id
-                 };
-                 // Note: We return here to await user input. The attack resolution is paused.
-                 return newState;
-             }
-             
-             else if (!cannotEvade) {
-                const evades = target.formation.filter(c => c.defId === CID.LargeHindLegs || c.defId === CID.SwimFast);
-                if (evades.length > 0 && !target.statuses.some(s => s.type === 'Grappled')) { 
-                    const evadeFlip = performCoinFlip('Evasion Attempt', getRNG(action.rng, rngIndex++), target.id);
-                    if (evadeFlip) {
-                        log(`${target.name} evaded the attack!`);
-                        hit = false;
-                        if (target.formation.some(c => c.defId === CID.SwiftReflexes) && target.stamina < target.maxStamina) {
-                            target.stamina += 1;
-                            log(`${target.name} gained Stamina (Swift Reflexes).`);
-                        }
-                    }
-                }
-             }
-         }
-
-         if (hit) {
-             resolveAttackDamage(p, target, def, action.rng);
-         }
-      }
-
-      // -- ABILITY --
-      else if (action.actionType === 'ABILITY') {
-         log(`${p.name} used ability ${def.name}.`);
-
-         if (def.id === CID.Hibernate) {
-            if (p.hp < p.maxHp - 2) p.hp += 2; else p.stamina += 1;
-         }
-         else if (def.id === CID.ShortBurst) {
-            p.stamina += 1;
-            notify("Short Burst! +1 Stamina.", 'success');
-         }
-         else if (def.id === CID.Roar) {
-            if (performCoinFlip('Roar Intimidation', getRNG(action.rng, rngIndex++), p.id)) {
-               // Duration 2 ensures it survives the End Turn decrement and lasts through the opponent's upcoming turn
-               target.statuses.push({ type: 'CannotAttack', duration: 2 });
-               notify("Roar successful! Opponent cannot attack.", 'success');
-            } else {
-               notify("Roar failed.", 'warning');
-            }
-         }
-         else if (def.id === CID.Freeze) {
-             if (performCoinFlip('Freeze (Hide)', getRNG(action.rng, rngIndex++), p.id)) {
-                 p.statuses.push({ type: 'Hidden', duration: 1 });
-                 notify("Frozen & Hidden!", 'success');
-             } else {
-                 notify("Failed to hide.", 'warning');
-             }
-         }
-         else if (def.id === CID.Regeneration) {
-            p.hp = Math.min(p.maxHp, p.hp + 4);
-         }
-         else if (def.id === CID.EnhancedSmell) {
-            target.statuses = target.statuses.filter(s => s.type !== 'Hidden');
-            notify("Revealed hidden opponent!", 'success');
-            p.hasActedThisTurn = false; 
-         }
-         else if (def.id === CID.Confuse) {
-            if (performCoinFlip('Confuse', getRNG(action.rng, rngIndex++), p.id)) {
-               if (!target.formation.some(c => c.defId === CID.Intelligence)) {
-                  target.statuses.push({ type: 'Confused' });
-               } else notify("Blocked by Intelligence", 'warning');
-            }
-         }
-         else if (def.id === CID.ToxicSpit) {
-             if (performCoinFlip('Toxic Spit', getRNG(action.rng, rngIndex++), p.id)) {
-                 target.statuses.push({ type: 'Poisoned' });
-             } else {
-                 target.statuses.push({ type: 'Stuck' }); 
-             }
-         }
-         else if (def.id === CID.StickyTongue) {
-             if (performCoinFlip('Sticky Tongue', getRNG(action.rng, rngIndex++), p.id)) {
-                 target.statuses.push({ type: 'Stuck' });
-                 if (target.size === 'Small') target.hp -= 1;
-             }
-         }
-         else if (def.id === CID.AdrenalineRush) {
-             p.stamina += 1;
-             p.statuses.push({ type: 'StaminaDebt', duration: 1 }); 
-             notify("Gained +1 Stamina (Debt next turn)", 'success');
-         }
-         else if (def.id === CID.TerritorialDisplay) {
-             if (performCoinFlip('Territorial Display', getRNG(action.rng, rngIndex++), p.id)) {
-                 target.hand = [];
-                 notify("Opponent discarded hand!", 'success');
-             }
-         }
-         else if (def.id === CID.ExhaustingRoar) {
-             if (performCoinFlip('Exhausting Roar', getRNG(action.rng, rngIndex++), p.id)) {
-                 target.stamina = Math.max(0, target.stamina - 1);
-             }
-         }
-         else if (def.id === CID.ShedSkin) {
-             p.statuses = [];
-         }
-         else if (def.id === CID.Rage) {
-            // NEW RAGE LOGIC
-            p.statuses = p.statuses.filter(s => s.type !== 'Grappled' && s.type !== 'Stuck');
-            p.statuses.push({ type: 'DamageBuff', duration: 1 });
-            notify("Rage! +1 Damage & Free Action.", 'success');
-         }
-         else if (def.id === CID.Focus) {
-            // NEW FOCUS LOGIC
-            p.statuses = p.statuses.filter(s => s.type !== 'Grappled' && s.type !== 'Stuck');
-            p.statuses.push({ type: 'DamageBuff', duration: 1 });
-            p.guaranteedHeads = true;
-            notify("Focus! +1 Damage & Guaranteed Heads.", 'success');
-         }
-         else if (def.id === CID.Copycat) {
-            if (action.targetHandCardId) {
-               const targetHandIdx = target.hand.findIndex(c => c.instanceId === action.targetHandCardId);
-               if (targetHandIdx !== -1) {
-                  const stolenCard = target.hand.splice(targetHandIdx, 1)[0];
-                  p.hand.push(stolenCard);
-                  notify(`Stole ${CARDS[stolenCard.defId].name}!`, 'success');
-               } else {
-                  notify("Failed to steal card.", 'error');
-               }
-            }
-         }
-         else if (def.id === CID.Agile) {
-             p.statuses.push({ type: 'Accurate', duration: 1 });
-             notify("Agile! Attacks won't miss.", 'success');
-         }
-         
-         // Consumable Removal
-         if (def.abilityStatus === AS.ConsumableImpact) {
-            p.formation = p.formation.filter(c => c.instanceId !== action.cardInstanceId);
-         }
-      }
-
-      if (target.hp <= 0) {
-         newState.winner = p.id;
-         log(`${p.name} Wins!`);
-         notify(`${p.name} Wins!`, 'success');
-      }
-      
-      return newState;
+        p.statuses = p.statuses.filter(s => s.type !== 'Leeched');
+        log(`${p.name} removed Leech.`);
+        notify("Removed Leech!", 'success');
+        return newState;
     }
 
     case 'RESOLVE_CHOICE': {
-        const pending = newState.pendingChoice;
-        if (!pending || pending.playerId !== action.playerId) return state;
-        
         const p = newState.players[action.playerId];
-        // Safe target resolution (choice might not have target)
-        const target = pending.targetPlayerId ? newState.players[pending.targetPlayerId] : null;
-        const choice = action.choice;
-        const cardDef = CARDS[pending.cardId];
+        const opponentId = Object.keys(newState.players).find(id => id !== action.playerId)!;
+        const opponent = newState.players[opponentId];
 
-        newState.pendingChoice = null; // Clear state
-
-        if (choice === 'Attack') {
-             if (!target) return state;
-             // Standard Attack resolution resuming...
-             // We need to copy the logic from ATTACK hit calculation briefly or extract it.
-             // For Big Claws, we assume standard hit checks were conceptually done or we do them now.
-             // To simplify, we assume Big Claws hits if we chose Attack unless evaded.
-             // Re-running full hit logic is complex due to state change. 
-             // Simplified: Resolve Damage directly as if hit confirmed, since usually choice happens on activation.
-             resolveAttackDamage(p, target, cardDef, action.rng);
-        } 
-        else if (choice === 'Dig') {
-            p.statuses.push({ type: 'Hidden', duration: 1 });
-            log(`${p.name} used Big Claws to Dig (Hidden).`);
-            notify("Dug underground!", 'success');
-        }
-        else if (choice === 'Climb') {
-            p.statuses.push({ type: 'Climbing', duration: 1 });
-            log(`${p.name} used Big Claws to Climb.`);
-            notify("Climbing! (Evades non-flying)", 'success');
-        }
-
-        if (target && target.hp <= 0) {
-            newState.winner = p.id;
-            log(`${p.name} Wins!`);
-            notify(`${p.name} Wins!`, 'success');
+        if (!newState.pendingChoice || newState.pendingChoice.playerId !== p.id) return state;
+        
+        log(`${p.name} chose ${action.choice} for Big Claws!`);
+        
+        newState.pendingChoice = null;
+        p.hasActedThisTurn = true;
+        
+        if (action.choice === 'Attack') {
+             resolveAttackDamage(p, opponent, CARDS[CID.BigClaws], action.rng);
+        } else if (action.choice === 'Dig') {
+             p.statuses.push({ type: 'Hidden', duration: 1 });
+             notify("Used Dig (Hidden)", 'success');
+        } else if (action.choice === 'Climb') {
+             p.statuses.push({ type: 'Climbing', duration: 1 });
+             notify("Used Climb (Climbing Status)", 'success');
         }
 
         return newState;
@@ -985,35 +679,309 @@ export const gameReducer = (state: GS, action: GA): GS => {
     case 'RESOLVE_AGILE': {
         if (!newState.pendingReaction) return state;
         const { attackerId, targetId, attackCardId } = newState.pendingReaction;
-        
         const attacker = newState.players[attackerId];
         const target = newState.players[targetId];
         const def = CARDS[attackCardId];
-        
-        if (action.useAgile) {
-            if (target.stamina >= 2) {
-                target.stamina -= 2;
-                log(`${target.name} chose to Evade (Agile)!`);
-                notify(`${target.name} Evaded!`, 'success');
-                
-                if (target.formation.some(c => c.defId === CID.SwiftReflexes) && target.stamina < target.maxStamina) {
-                    target.stamina += 1;
-                    log(`${target.name} gained Stamina (Swift Reflexes).`);
-                }
-                // Attack ends here
-            } else {
-                notify("Not enough stamina to evade!", 'error');
-                resolveAttackDamage(attacker, target, def, action.rng);
+
+        newState.pendingReaction = null;
+
+        if (action.useAgile && target.stamina >= 2) {
+            target.stamina -= 2;
+            log(`${target.name} Evaded ${def.name} using Agile!`);
+            notify("Evaded!", 'success');
+            
+            if (target.formation.some(c => c.defId === CID.SwiftReflexes)) {
+                target.stamina += 1;
+                notify("Swift Reflexes refund (+1 ST)", 'info');
             }
         } else {
-            log(`${target.name} chose not to evade.`);
+            // If chose not to evade or couldn't afford it, resolve damage
             resolveAttackDamage(attacker, target, def, action.rng);
         }
         
-        newState.pendingReaction = null;
         return newState;
     }
 
+    case 'USE_ACTION': {
+        const p = newState.players[action.playerId];
+        const target = newState.players[action.targetPlayerId];
+        const cardInstance = p.formation.find(c => c.instanceId === action.cardInstanceId);
+        if (!cardInstance) return state;
+        
+        const def = CARDS[cardInstance.defId];
+        
+        // Validation
+        if (p.hasActedThisTurn && def.abilityStatus !== AS.None && def.id !== CID.ShortBurst && def.id !== CID.AdrenalineRush && def.id !== CID.EnhancedSmell && def.id !== CID.Focus && def.id !== CID.Agile) {
+            notify("Already acted this turn!", 'error');
+            return state;
+        }
+        if (p.stamina < def.staminaCost) {
+            notify(`Need ${def.staminaCost} Stamina!`, 'error');
+            return state;
+        }
+
+        // STATUS CHECKS
+        if (p.statuses.some(s => s.type === 'Stuck')) {
+            if (def.type === CType.Physical || (def.type === CType.Ability && def.id === CID.Dig)) {
+                notify("You are Stuck! Cannot move/attack.", 'error');
+                return state;
+            }
+        }
+        if (p.statuses.some(s => s.type === 'CannotAttack') && def.type === CType.Physical) {
+            notify("Cannot Attack due to Roar!", 'error');
+            return state;
+        }
+        if (p.statuses.some(s => s.type === 'Grappled')) {
+             if (def.id !== CID.Focus && def.id !== CID.Rage && def.type !== CType.Physical) {
+                 notify("Grappled! Can only Attack or use Breakout abilities.", 'error');
+                 return state;
+             }
+             // Must flip heads to attack while grappled
+             if (def.type === CType.Physical) {
+                 const flip = performCoinFlip('Grappled Attack', getRNG(action.rng, 0), p.id);
+                 if (!flip) {
+                     p.stamina -= def.staminaCost;
+                     p.hasActedThisTurn = true;
+                     notify("Attack failed due to Grapple.", 'warning');
+                     return newState;
+                 }
+             }
+        }
+        
+        // Confused Check (Before Action)
+        if (p.statuses.some(s => s.type === 'Confused')) {
+            const flip = performCoinFlip('Confusion Action Check', getRNG(action.rng, 0), p.id);
+            if (!flip) {
+                p.stamina -= def.staminaCost;
+                p.hasActedThisTurn = true;
+                log(`${p.name} is confused and hurt themselves!`);
+                p.hp -= 1;
+                notify("Confusion caused self-harm!", 'error');
+                return newState;
+            }
+        }
+
+        // Pay Cost
+        p.stamina -= def.staminaCost;
+        
+        // Mark action used (unless free action)
+        const isFreeAction = def.id === CID.ShortBurst || def.id === CID.AdrenalineRush || def.id === CID.EnhancedSmell || def.id === CID.Focus || def.id === CID.Rage || (def.id === CID.Agile && def.type === CType.Ability);
+        if (!isFreeAction) {
+            p.hasActedThisTurn = true;
+        }
+
+        // Handle Consumables
+        if (def.abilityStatus === AS.ConsumableImpact) {
+             const idx = p.formation.findIndex(c => c.instanceId === cardInstance.instanceId);
+             if (idx !== -1) {
+                 p.formation.splice(idx, 1);
+                 p.discard.push(cardInstance);
+             }
+        }
+
+        let rngIndex = 1;
+
+        // PHYSICAL ATTACK LOGIC
+        if (def.type === CType.Physical) {
+            
+            // Handle Big Claws Choice Trigger
+            if (def.id === CID.BigClaws) {
+                newState.pendingChoice = {
+                    id: Math.random().toString(),
+                    playerId: action.playerId,
+                    cardId: def.id,
+                    options: ['Attack', 'Dig', 'Climb'],
+                    targetPlayerId: action.targetPlayerId
+                };
+                return newState;
+            }
+
+            // Check Climbing Evasion (Attacker must be Flying to hit a Climbing target)
+            const targetIsClimbing = target.statuses.some(s => s.type === 'Climbing');
+            const attackerIsFlying = p.statuses.some(s => s.type === 'Flying') || def.id === CID.DiveBomb; // Dive Bomb implies flying momentarily
+            
+            if (targetIsClimbing && !attackerIsFlying) {
+                log(`${p.name}'s attack missed because ${target.name} is Climbing!`);
+                notify("Miss! Target is Climbing.", 'warning');
+                return newState;
+            }
+
+            // Check Accuracy / Evasion
+            const isAccurate = p.statuses.some(s => s.type === 'Accurate') || p.statuses.some(s => s.type === 'Chasing');
+            const targetHidden = target.statuses.some(s => s.type === 'Hidden');
+            const targetCamouflaged = target.statuses.some(s => s.type === 'Camouflaged');
+            const targetFlying = target.statuses.some(s => s.type === 'Flying');
+            const targetEvading = target.statuses.some(s => s.type === 'Evading');
+            
+            // Forced Miss Conditions
+            if (!isAccurate) {
+                if (targetHidden) {
+                    log(`${p.name} missed (Target Hidden).`);
+                    notify("Miss! Target Hidden.", 'warning');
+                    return newState;
+                }
+                if (targetEvading) {
+                     log(`${p.name} missed (Target Evaded).`);
+                     notify("Miss! Target Evaded.", 'warning');
+                     target.statuses = target.statuses.filter(s => s.type !== 'Evading');
+                     return newState;
+                }
+                if (targetCamouflaged && !performCoinFlip('Camouflage Miss Chance', getRNG(action.rng, rngIndex++), p.id)) {
+                    log(`${p.name} missed (Camouflage).`);
+                    notify("Miss! Camouflage.", 'warning');
+                    return newState;
+                }
+                if (targetFlying && !performCoinFlip('Flying Miss Chance', getRNG(action.rng, rngIndex++), p.id)) {
+                    log(`${p.name} missed (Target Flying).`);
+                    notify("Miss! Target Flying.", 'warning');
+                    return newState;
+                }
+                // Water Camouflage
+                if (newState.habitat === H.Water && target.formation.some(c => c.defId === CID.CamouflageWater)) {
+                    if (!performCoinFlip('Water Camo', getRNG(action.rng, rngIndex++), p.id)) {
+                        log(`${p.name} missed (Water Camo).`);
+                        return newState;
+                    }
+                }
+                // Stand on Hind Legs
+                if (target.formation.some(c => c.defId === CID.StandOnHindLegs)) {
+                     if (!performCoinFlip('Intimidation', getRNG(action.rng, rngIndex++), p.id)) {
+                         log(`${p.name} was intimidated and missed.`);
+                         notify("Intimidated! Miss.", 'warning');
+                         return newState;
+                     }
+                }
+            }
+
+            // Agile Reaction Trigger (Opponent can pay to evade)
+            const canTargetEvade = target.formation.some(c => c.defId === CID.SmallSize || c.defId === CID.Agile) && target.stamina >= 2 && !target.statuses.some(s => s.type === 'Grappled' || s.type === 'CannotEvade' || s.type === 'Stuck');
+            
+            // If attacking with Ambush, flip for evade prevention
+            let ambushPrevent = false;
+            if (def.id === CID.AmbushAttack) {
+                 if (performCoinFlip('Ambush', getRNG(action.rng, rngIndex++), p.id)) ambushPrevent = true;
+            }
+            if (def.id === CID.SwimFast) ambushPrevent = true; // Swim fast prevents evasion
+
+            if (canTargetEvade && !ambushPrevent && !isAccurate) {
+                 newState.pendingReaction = {
+                     type: 'AGILE_EVADE',
+                     attackerId: p.id,
+                     targetId: target.id,
+                     attackCardId: def.id
+                 };
+                 log(`${target.name} can Evade! Waiting for reaction...`);
+                 return newState;
+            }
+            
+            // Resolve Damage directly if no reaction
+            resolveAttackDamage(p, target, def, action.rng);
+
+        } else {
+            // ABILITY LOGIC
+            if (def.id === CID.ShortBurst) { p.stamina += 1; notify("+1 Stamina", 'success'); }
+            if (def.id === CID.AdrenalineRush) { p.stamina += 1; p.statuses.push({ type: 'StaminaDebt' }); notify("Adrenaline Rush!", 'success'); }
+            if (def.id === CID.Confuse) {
+                if (target.formation.some(c => c.defId === CID.Intelligence)) {
+                    log(`${target.name} is immune to Confusion.`);
+                    notify("Immune!", 'info');
+                } else if (performCoinFlip('Confuse', getRNG(action.rng, rngIndex++), p.id)) {
+                    target.statuses.push({ type: 'Confused', duration: 1 });
+                    log(`${target.name} is Confused!`);
+                } else {
+                    notify("Confuse failed.", 'warning');
+                }
+            }
+            if (def.id === CID.Dig) {
+                p.statuses.push({ type: 'Hidden', duration: 1 });
+                log(`${p.name} used Dig.`);
+            }
+            if (def.id === CID.Freeze) {
+                 if (performCoinFlip('Freeze', getRNG(action.rng, rngIndex++), p.id)) {
+                     p.statuses.push({ type: 'Hidden', duration: 1 });
+                     log(`${p.name} froze and is Hidden.`);
+                 }
+            }
+            if (def.id === CID.Flight) {
+                p.statuses.push({ type: 'Flying', duration: 3 }); // Temporary flight
+                log(`${p.name} took flight!`);
+            }
+            if (def.id === CID.Roar) {
+                 if (performCoinFlip('Roar', getRNG(action.rng, rngIndex++), p.id)) {
+                     target.statuses.push({ type: 'CannotAttack', duration: 1 });
+                     log(`${target.name} is terrified by Roar!`);
+                 }
+            }
+            if (def.id === CID.Hibernate) {
+                p.hp = Math.min(p.maxHp, p.hp + 2);
+                if (p.hp === p.maxHp) p.stamina += 1;
+                log(`${p.name} hibernated.`);
+            }
+            if (def.id === CID.Regeneration) {
+                p.hp = Math.min(p.maxHp, p.hp + 4);
+                log(`${p.name} regenerated health.`);
+            }
+            if (def.id === CID.ToxicSpit) {
+                const flip = performCoinFlip('Toxic Spit', getRNG(action.rng, rngIndex++), p.id);
+                if (flip) target.statuses.push({ type: 'Poisoned' });
+                else target.statuses.push({ type: 'Stuck', duration: 1 });
+            }
+            if (def.id === CID.Focus) {
+                p.statuses = p.statuses.filter(s => s.type !== 'Grappled' && s.type !== 'Stuck');
+                p.guaranteedHeads = true;
+                p.statuses.push({ type: 'DamageBuff', duration: 1 });
+                log(`${p.name} Focused! Breakout + Dmg + Guaranteed Heads.`);
+            }
+            if (def.id === CID.Rage) {
+                p.statuses = p.statuses.filter(s => s.type !== 'Grappled' && s.type !== 'Stuck');
+                p.statuses.push({ type: 'DamageBuff', duration: 1 });
+                log(`${p.name} Enraged!`);
+            }
+            if (def.id === CID.StickyTongue) {
+                if (performCoinFlip('Sticky Tongue', getRNG(action.rng, rngIndex++), p.id)) {
+                    target.statuses.push({ type: 'Stuck', duration: 1 });
+                }
+            }
+            if (def.id === CID.ShedSkin) {
+                p.statuses = p.statuses.filter(s => s.type === 'DamageBuff' || s.type === 'Hidden' || s.type === 'Flying'); // Keep buffs
+                log(`${p.name} Shed Skin (Cured Statuses).`);
+            }
+            if (def.id === CID.TerritorialDisplay) {
+                if (performCoinFlip('Display', getRNG(action.rng, rngIndex++), p.id)) {
+                    target.hand = []; // Discard Hand
+                    log(`${target.name} fled and dropped their hand!`);
+                    notify("Opponent Hand Discarded!", 'success');
+                }
+            }
+            if (def.id === CID.EnhancedSmell) {
+                target.statuses = target.statuses.filter(s => s.type !== 'Hidden' && s.type !== 'Camouflaged');
+                p.statuses.push({ type: 'Chasing', duration: 1 });
+                log(`${p.name} sniffed out the opponent!`);
+            }
+            if (def.id === CID.ExhaustingRoar) {
+                if (performCoinFlip('Exhaust Roar', getRNG(action.rng, rngIndex++), p.id)) {
+                    target.stamina = Math.max(0, target.stamina - 1);
+                    log(`${target.name} lost stamina from Roar.`);
+                }
+            }
+            if (def.id === CID.Agile) {
+                p.statuses.push({ type: 'Accurate', duration: 1 });
+                log(`${p.name} is moving with Agility (Accurate).`);
+            }
+            if (def.id === CID.Copycat && action.targetHandCardId) {
+                 const targetCardIdx = target.hand.findIndex(c => c.instanceId === action.targetHandCardId);
+                 if (targetCardIdx !== -1) {
+                     const stolen = target.hand.splice(targetCardIdx, 1)[0];
+                     p.hand.push(stolen);
+                     log(`${p.name} copied/stole ${CARDS[stolen.defId].name}!`);
+                     notify("Card Stolen!", 'success');
+                 }
+            }
+        }
+
+        return newState;
+    }
+      
     default:
       return state;
   }
