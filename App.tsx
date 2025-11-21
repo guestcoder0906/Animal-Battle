@@ -6,7 +6,7 @@ import { getRandomElement } from './constants';
 import { computeAiActions, computeReaction } from './services/aiLogic';
 
 const App: React.FC = () => {
-  const [status, setStatus] = useState<'menu' | 'playing'>('menu');
+  const [status, setStatus] = useState<'menu' | 'rules' | 'playing'>('menu');
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [playerId, setPlayerId] = useState<string>('');
   const [myName, setMyName] = useState('Player');
@@ -76,7 +76,7 @@ const App: React.FC = () => {
     };
   }, [gameState?.currentPlayer, gameState?.turn, gameState?.pendingReaction]); 
 
-  const startGame = () => {
+  const prepareGame = () => {
     const myId = 'local-player';
     const aiId = 'ai-bot';
     setPlayerId(myId);
@@ -109,6 +109,10 @@ const App: React.FC = () => {
     }
 
     dispatch({ type: 'INIT_GAME', payload: initialState });
+    setStatus('rules');
+  };
+
+  const confirmStart = () => {
     setStatus('playing');
   };
 
@@ -127,7 +131,7 @@ const App: React.FC = () => {
           />
 
           <button 
-            onClick={startGame} 
+            onClick={prepareGame} 
             className="w-full py-4 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 rounded-lg font-black text-xl shadow-lg transition transform hover:scale-105 active:scale-95 border-b-4 border-orange-800"
           >
             PLAY GAME
@@ -136,6 +140,31 @@ const App: React.FC = () => {
           <div className="mt-6 text-center text-stone-500 text-xs">
             Single Player vs AI
           </div>
+        </div>
+      )}
+
+      {status === 'rules' && (
+        <div className="max-w-lg w-full p-8 bg-stone-800 rounded-lg shadow-2xl border-2 border-amber-500/50 animate-fade-in">
+           <h2 className="text-3xl font-bold text-amber-500 mb-6 text-center">How to Play</h2>
+           <div className="space-y-4 text-stone-300 mb-8 text-sm md:text-base leading-relaxed">
+              <p className="bg-black/30 p-3 rounded border border-white/5">
+                 <span className="text-amber-400 font-bold block mb-1">Deck Building Limit</span>
+                 Max <span className="text-white font-bold">5 Physical</span> and Max <span className="text-white font-bold">5 Ability</span> cards active on the field at once.
+              </p>
+              <p className="bg-black/30 p-3 rounded border border-white/5">
+                 <span className="text-amber-400 font-bold block mb-1">Turn Actions</span>
+                 You can generally perform <span className="text-white font-bold">1 Play Card</span> and <span className="text-white font-bold">1 Action</span> (Attack/Ability) per turn, unless effects apply.
+              </p>
+              <p className="text-xs text-stone-500 italic text-center">
+                 Cards are drawn automatically. Duplicates are reshuffled.
+              </p>
+           </div>
+           <button 
+             onClick={confirmStart}
+             className="w-full py-3 bg-green-600 hover:bg-green-500 text-white font-black text-xl rounded-lg shadow-lg transition-transform hover:scale-105 border-b-4 border-green-800"
+           >
+             START MATCH
+           </button>
         </div>
       )}
 

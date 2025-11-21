@@ -205,7 +205,7 @@ export const gameReducer = (state: GS, action: GA): GS => {
       }
 
       if (target.formation.some(c => c.defId === CID.BarbedQuills)) {
-         const hasArmor = attacker.formation.some(c => c.defId === CID.ArmoredExoskeleton || c.defId === CID.SpikyBody);
+         const hasArmor = attacker.formation.some(c => c.defId === CID.ArmoredExoskeleton || c.defId === CID.ArmoredScales);
          const isGrappled = target.statuses.some(s => s.type === 'Grappled');
          
          if (!hasArmor) {
@@ -645,30 +645,18 @@ export const gameReducer = (state: GS, action: GA): GS => {
       }
 
       if (nextPlayer.deck.length > 0) {
-        // Deterministically find a unique card
+        // Strict Unique Draw Logic: Filter deck for cards NOT in hand AND NOT in formation
         const uniqueCardIndex = nextPlayer.deck.findIndex(c => 
             !nextPlayer.hand.some(h => h.defId === c.defId) && 
             !nextPlayer.formation.some(f => f.defId === c.defId)
         );
 
-        let drawn: CI | undefined;
-
         if (uniqueCardIndex !== -1) {
-            drawn = nextPlayer.deck.splice(uniqueCardIndex, 1)[0];
-        } else {
-            // Fallback: Try top card (will likely be rejected by duplicate check below)
-            drawn = nextPlayer.deck.shift();
-        }
-  
-        if (drawn) {
+            const drawn = nextPlayer.deck.splice(uniqueCardIndex, 1)[0];
             const def = CARDS[drawn.defId];
-            const isStillDuplicate = nextPlayer.hand.some(c => c.defId === drawn!.defId) || nextPlayer.formation.some(c => c.defId === drawn!.defId);
             const isCompatible = isCardCompatible(nextPlayer, def);
             
-            if (isStillDuplicate) {
-               log(`${nextPlayer.name} drew duplicate ${def.name} (Returned to deck).`);
-               nextPlayer.deck.push(drawn);
-            } else if (!isCompatible) {
+            if (!isCompatible) {
                nextPlayer.hand.push(drawn);
                log(`${nextPlayer.name} drew ${def.name} (Added to Hand - Type Mismatch).`);
             } else {
@@ -695,6 +683,8 @@ export const gameReducer = (state: GS, action: GA): GS => {
                 log(`${nextPlayer.name} drew a card.`);
               }
             }
+        } else {
+            log(`${nextPlayer.name} has no unique cards to draw.`);
         }
       }
 

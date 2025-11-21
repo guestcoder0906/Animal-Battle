@@ -27,6 +27,11 @@ const ACTIVE_ABILITIES = [
 ];
 
 const NotificationToast: React.FC<{ note: GameNotification, onDismiss: () => void }> = ({ note, onDismiss }) => {
+  useEffect(() => {
+    const timer = setTimeout(onDismiss, 3000);
+    return () => clearTimeout(timer);
+  }, [onDismiss]);
+
   const colors = {
     info: 'bg-blue-600/90 border-blue-400',
     error: 'bg-red-600/90 border-red-400',
@@ -75,15 +80,6 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
       logRef.current.scrollTop = 0;
     }
   }, [state.log]);
-
-  useEffect(() => {
-    if (state.notifications.length > 0) {
-      const timer = setTimeout(() => {
-        dispatch({ type: 'DISMISS_NOTIFICATION', id: state.notifications[0].id });
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [state.notifications, dispatch]);
 
   if (!me || !opponent) return <div className="text-white p-10">Waiting for opponent...</div>;
 
@@ -143,18 +139,7 @@ export const Game: React.FC<GameProps> = ({ state, playerId, dispatch }) => {
                 setEvolveCardId(null);
             } else {
                 // Inform the user that this card cannot be evolved
-                const msgId = Math.random().toString(36).substr(2, 9);
-                // Since we can't call notify directly here (it's in reducer), we rely on the reducer validation 
-                // OR we simply don't dispatch and let them pick another.
-                // However, the user requested a fix for "doesn't work". Silence is the enemy.
-                // We will dispatch a dummy action or just reset, but better to let them keep picking.
-                // But we should probably provide visual feedback.
-                // Given the architecture, we can't inject a notification without a dispatch.
-                // Let's just do nothing but maybe shake the card or similar? 
-                // For now, let's assume the logic was the issue, but if it fails, we want to let them know.
-                // We'll use the native alert for a quick fix or rely on Game logic if we had a specific action for 'USER_ERROR'.
-                // Actually, we can just reset if it fails so they aren't stuck, OR assume the previous logic fix covered it.
-                // Let's just keep the selection mode open.
+                // Just visual feedback handled implicitly
             }
             return;
         }
